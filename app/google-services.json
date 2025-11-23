@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "48822187516",
+    "project_id": "sbikemap",
+    "storage_bucket": "sbikemap.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:48822187516:android:753abfc97b175b9df42e79",
+        "android_client_info": {
+          "package_name": "com.example.sbikemap"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "48822187516-8fgcsd3nqaktvbmj5oahclp558c6evhh.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.sbikemap",
+            "certificate_hash": "e65529247828b257d5a112f05ab6a31154b0a2bd"
+          }
+        },
+        {
+          "client_id": "48822187516-rfrnofrb58hh11r3so6beun9j5lh65us.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBdMOUjlAFn1d-O7vYUvZVrYG9lH2QbI2Y"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "48822187516-rfrnofrb58hh11r3so6beun9j5lh65us.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
