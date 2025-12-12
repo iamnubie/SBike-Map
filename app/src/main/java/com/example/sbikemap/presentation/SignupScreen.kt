@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,14 +28,19 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.sbikemap.presentation.viewmodel.AuthViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import kotlinx.coroutines.launch
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SignupScreen(navController: NavHostController){
+fun SignupScreen(navController: NavHostController, viewModel: AuthViewModel = viewModel()){
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
 
     Box(modifier = Modifier.fillMaxSize().padding(16.dp),
         contentAlignment = Alignment.Center){
@@ -75,18 +81,37 @@ fun SignupScreen(navController: NavHostController){
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            val context = LocalContext.current
+
 
             Button(onClick = {
                 Firebase.auth.createUserWithEmailAndPassword(email, password)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
-                            Toast.makeText(context, "Đăng ký thành công! Vui lòng đăng nhập.", Toast.LENGTH_SHORT).show()
-                            navController.navigate("login"){
-                                popUpTo("signup") {inclusive = true}
+                            // 2. Lấy ID Token từ Firebase
+                            Firebase.auth.currentUser?.getIdToken(true)?.addOnSuccessListener { result ->
+                                val idToken = result.token
+
+                                // 3. GỌI BACKEND để tạo hồ sơ User
+                                coroutineScope.launch {
+                                    try {
+                                        // Sử dụng hàm đăng ký Firebase của ViewModel
+                                        // (Cần tạo hàm này trong AuthViewModel)
+                                        viewModel.handleFirebaseRegister(idToken ?: "")
+
+                                        Toast.makeText(context, "Đăng ký thành công! Vui lòng đăng nhập.", Toast.LENGTH_SHORT).show()
+                                        navController.navigate("login"){
+                                            popUpTo("signup") {inclusive = true}
+                                        }
+                                    } catch (e: Exception) {
+                                        // 4. Xử lý lỗi Backend (Nếu không tạo được hồ sơ trong DB)
+                                        // *Bạn có thể muốn xóa user khỏi Firebase nếu lỗi này xảy ra*
+                                        Firebase.auth.currentUser?.delete()
+                                        Toast.makeText(context, "Lỗi tạo hồ sơ Backend: ${e.message}", Toast.LENGTH_LONG).show()
+                                    }
+                                }
                             }
                         } else {
-                            Toast.makeText(context, task.exception?.message ?: "Đăng ký thất bại", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, task.exception?.message ?: "Đăng ký Firebase thất bại", Toast.LENGTH_SHORT).show()
                         }
                     }
             }, modifier = Modifier.fillMaxWidth()) {

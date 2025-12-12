@@ -16,6 +16,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,14 +29,46 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.example.sbikemap.presentation.viewmodel.AuthViewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(navController: NavHostController){
+fun LoginScreen(
+    navController: NavHostController,
+    viewModel: AuthViewModel = viewModel()
+){
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    // Theo dõi trạng thái từ ViewModel
+    val authState by viewModel.authState.collectAsState()
+
+    LaunchedEffect(authState) {
+        when (authState) {
+            is AuthViewModel.AuthState.Success -> {
+                val response = (authState as AuthViewModel.AuthState.Success).response
+                // Log/Lưu AccessToken và RefreshToken ở đây
+                Toast.makeText(context, "Đăng nhập Backend thành công! User: ${response.email}", Toast.LENGTH_SHORT).show()
+                viewModel.resetState() // Reset để tránh lặp lại navigation
+                navController.navigate("home"){
+                    popUpTo("login") {inclusive = true}
+                }
+            }
+            is AuthViewModel.AuthState.Error -> {
+                val message = (authState as AuthViewModel.AuthState.Error).message
+                Toast.makeText(context, "Lỗi Backend: $message", Toast.LENGTH_LONG).show()
+                viewModel.resetState()
+            }
+            is AuthViewModel.AuthState.Loading -> {
+                // Hiển thị vòng quay loading nếu cần
+                Toast.makeText(context, "Đang xử lý Backend...", Toast.LENGTH_SHORT).show()
+            }
+            else -> { /* Idle */ }
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().padding(16.dp),
         contentAlignment = Alignment.Center){
@@ -75,18 +109,23 @@ fun LoginScreen(navController: NavHostController){
             )
             Spacer(modifier = Modifier.height(24.dp))
 
-            val context = LocalContext.current
-
             Button(onClick = {
+                // 4. Bắt đầu luồng: Xác thực Firebase
                 Firebase.auth.signInWithEmailAndPassword(email, password)
                     .addOnCompleteListener { task ->
                         if (task.isSuccessful) {
-                            Toast.makeText(context, "Đăng nhập thành công!", Toast.LENGTH_SHORT).show()
-                            navController.navigate("home"){
-                                popUpTo("login") {inclusive = true}
+                            // 5. Thành công trên Firebase, LẤY ID TOKEN
+                            Firebase.auth.currentUser?.getIdToken(true)?.addOnSuccessListener { result ->
+                                val idToken = result.token
+                                // 6. Gửi ID Token đến ViewModel để gọi Backend
+                                viewModel.handleFirebaseLogin(idToken ?: "")
+                            }?.addOnFailureListener {
+                                // Lỗi lấy ID Token (thường do mạng hoặc cấu hình)
+                                Toast.makeText(context, "Lỗi lấy Firebase Token", Toast.LENGTH_SHORT).show()
                             }
                         } else {
-                            Toast.makeText(context, task.exception?.message ?: "Đăng nhập thất bại", Toast.LENGTH_SHORT).show()
+                            // Lỗi xác thực Firebase
+                            Toast.makeText(context, task.exception?.message ?: "Đăng nhập Firebase thất bại", Toast.LENGTH_SHORT).show()
                         }
                     }
             }, modifier = Modifier.fillMaxWidth()) {
