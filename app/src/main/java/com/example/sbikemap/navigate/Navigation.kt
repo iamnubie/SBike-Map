@@ -5,6 +5,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.sbikemap.presentation.HomeScreen
+import com.example.sbikemap.presentation.LocationPermissionWrapper
 import com.example.sbikemap.presentation.LoginScreen
 import com.example.sbikemap.presentation.MapScreen
 import com.example.sbikemap.presentation.SignupScreen
@@ -17,7 +18,8 @@ fun Navigate(){
         composable("signup") { SignupScreen(navController)}
         composable("home") { HomeScreen(navController)}
         composable("map_route") {
-            MapScreen()
+//            MapScreen()
+            LocationPermissionWrapper()
         }
     }
 }

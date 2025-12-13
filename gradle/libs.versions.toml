@@ -1,4 +1,5 @@
 [versions]
+accompanistPermissions = "0.32.0"
 agp = "8.8.0"
 kotlin = "2.0.0"
 coreKtx = "1.17.0"
@@ -15,6 +16,7 @@ credentialsPlayServicesAuth = "1.5.0"
 googleid = "1.1.1"
 
 [libraries]
+accompanist-permissions = { module = "com.google.accompanist:accompanist-permissions", version.ref = "accompanistPermissions" }
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version = "1.13.1" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }

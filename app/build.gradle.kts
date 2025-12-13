@@ -70,5 +70,8 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.mapbox.maps:android-ndk27:11.17.1")
     implementation("com.mapbox.extension:maps-compose-ndk27:11.17.1")
+    implementation(libs.accompanist.permissions)
+    implementation("androidx.appcompat:appcompat:1.7.1")
+    implementation("androidx.appcompat:appcompat-resources:1.7.1")
 
 }
