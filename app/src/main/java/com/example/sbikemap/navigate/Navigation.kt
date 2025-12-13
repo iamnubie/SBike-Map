@@ -6,14 +6,18 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.sbikemap.presentation.HomeScreen
 import com.example.sbikemap.presentation.LoginScreen
+import com.example.sbikemap.presentation.MapScreen
 import com.example.sbikemap.presentation.SignupScreen
 
 @Composable
 fun Navigate(){
     val navController = rememberNavController()
-    NavHost(navController, startDestination = "login") {
+    NavHost(navController, startDestination = "map_route") {
         composable("login") { LoginScreen(navController)}
         composable("signup") { SignupScreen(navController)}
         composable("home") { HomeScreen(navController)}
+        composable("map_route") {
+            MapScreen()
+        }
     }
 }

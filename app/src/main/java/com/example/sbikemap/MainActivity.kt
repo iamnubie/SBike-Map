@@ -28,49 +28,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             SBikeMapTheme {
                 Navigate()
-//                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-//                    Greeting(
-//                        name = "Android",
-//                        modifier = Modifier.padding(innerPadding)
-//                    )
-//                }
-//                Surface(
-//                    modifier = Modifier.fillMaxSize(),
-//                ) {
-//                    val navController = rememberNavController()
-//                    NavHost(navController = navController, startDestination = "sign_in"){
-//                        composable("sign_in"){
-//                            val viewModel = viewModel<SignInViewModel>()
-//                            val state by viewModel.state.collectAsStateWithLifecycle()
-//
-//
-//                            LaunchedEffect(key1 = state.isSignInSuccessful) {
-//                                if(state.isSignInSuccessful){
-//                                    Toast.makeText(
-//                                        applicationContext,
-//                                        "Đăng nhập thành công",
-//                                        Toast.LENGTH_LONG
-//                                    ).show()
-//                                }
-//                            }
-//
-//                            SignInScreen(
-//                                state = state,
-//                                onSignInClick = {
-//                                    lifecycleScope.launch {
-//                                        val signInResult = googleAuthUiClient.signIn()
-//
-//                                        if (signInResult.data != null) {
-//                                            viewModel.onSignInSuccess()
-//                                        } else {
-//                                            viewModel.onSignInError(signInResult.errorMessage)
-//                                        }
-//                                    }
-//                                }
-//                            )
-//                        }
-//                    }
-//                }
             }
         }
     }
