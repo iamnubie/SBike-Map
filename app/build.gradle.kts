@@ -37,6 +37,7 @@ android {
     }
     buildFeatures {
         compose = true
+        viewBinding = true
     }
 }
 
@@ -73,5 +74,18 @@ dependencies {
     implementation(libs.accompanist.permissions)
     implementation("androidx.appcompat:appcompat:1.7.1")
     implementation("androidx.appcompat:appcompat-resources:1.7.1")
+    implementation("com.mapbox.navigationcore:android-ndk27:3.17.1")  // Adds core Navigation SDK functionality
+    implementation("com.mapbox.navigationcore:copilot-ndk27:3.17.1")
+    implementation("com.mapbox.navigationcore:ui-maps-ndk27:3.17.1")
+    implementation("com.mapbox.navigationcore:voice-ndk27:3.17.1")
+    implementation("com.mapbox.navigationcore:tripdata-ndk27:3.17.1")
+    implementation("com.mapbox.navigationcore:android-ndk27:3.17.1")
+    implementation("com.mapbox.navigationcore:ui-components-ndk27:3.17.1")
+    implementation("com.mapbox.search:autofill-ndk27:2.17.1")
+    implementation("com.mapbox.search:discover-ndk27:2.17.1")
+    implementation("com.mapbox.search:place-autocomplete-ndk27:2.17.1")
+    implementation("com.mapbox.search:offline-ndk27:2.17.1")
+    implementation("com.mapbox.search:mapbox-search-android-ndk27:2.17.1")
+    implementation("com.mapbox.search:mapbox-search-android-ui-ndk27:2.17.1")
 
 }

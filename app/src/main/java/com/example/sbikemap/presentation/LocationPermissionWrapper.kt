@@ -21,43 +21,64 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import android.provider.Settings
 import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.runtime.remember
 
 @SuppressLint("PermissionLaunchedDuringComposition")
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun LocationPermissionWrapper() {
-    val locationPermissionsState = rememberMultiplePermissionsState(
-        permissions = listOf(
+    val permissionsToRequest = remember {
+        val list = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION
         )
+        // Chỉ thêm quyền thông báo nếu là Android 13 (Tiramisu) trở lên
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            list.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+        list
+    }
+
+    // 2. Khởi tạo state với danh sách quyền đã tạo ở trên
+    val permissionState = rememberMultiplePermissionsState(
+        permissions = permissionsToRequest
     )
 
     when {
-        // 1. Quyền đã được cấp: Hiển thị bản đồ
-        locationPermissionsState.allPermissionsGranted -> {
+        // Tất cả quyền đã được cấp -> Vào màn hình bản đồ
+        permissionState.allPermissionsGranted -> {
             MapScreen(permissionsGranted = true)
         }
 
-        // 2. Cần giải thích (hoặc là lần đầu xin quyền, hoặc bị từ chối lần 1):
-        // (Chúng ta gộp logic lần đầu xin quyền vào đây)
-        locationPermissionsState.shouldShowRationale -> {
-            // Hiển thị giao diện giải thích lý do cần quyền
+        // Cần hiện lời giải thích
+        permissionState.shouldShowRationale -> {
             PermissionRationaleScreen(
                 onPermissionRequested = {
-                    locationPermissionsState.launchMultiplePermissionRequest()
+                    permissionState.launchMultiplePermissionRequest()
                 }
             )
         }
 
-        // 3. Bị từ chối vĩnh viễn (hoặc lần đầu người dùng từ chối dứt khoát)
-        // Nếu không thỏa mãn (1) và (2), chúng ta giả định đây là trạng thái cần hành động thủ công.
+        // Trường hợp còn lại: Chưa xin lần nào hoặc bị từ chối
+        // (Lưu ý: Logic mặc định của Accompanist ban đầu sẽ rơi vào đây để xin quyền lần đầu)
         else -> {
-            // Hiển thị thông báo yêu cầu người dùng vào Settings để cấp quyền thủ công.
-            PermissionDeniedScreen()
+            // Nếu chưa xin quyền lần nào thì xin luôn, còn nếu bị từ chối vĩnh viễn thì hiện màn hình lỗi
+            if (!permissionState.allPermissionsGranted && !permissionState.shouldShowRationale) {
+                // Một chút thủ thuật: Để tránh hiện màn hình lỗi ngay lập tức khi mới mở app,
+                // ta kiểm tra xem danh sách quyền bị từ chối có rỗng không (tức là chưa request bao giờ)
+                // Tuy nhiên để đơn giản cho flow của bạn, ta có thể hiển thị RationaleScreen ở lần đầu tiên luôn.
+                PermissionRationaleScreen(
+                    onPermissionRequested = {
+                        permissionState.launchMultiplePermissionRequest()
+                    }
+                )
+            } else {
+                PermissionDeniedScreen()
+            }
         }
     }
 }
@@ -65,49 +86,7 @@ fun LocationPermissionWrapper() {
 @Composable
 fun PermissionRationaleScreen(onPermissionRequested: () -> Unit) {
     Column(
-        modifier = Modifier
-            .fillMaxSize(),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
-    ) {
-        Card(
-            modifier = Modifier
-                .widthIn(max = 400.dp) // Giới hạn chiều rộng trên thiết bị lớn
-                .padding(horizontal = 24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp) // Thêm bóng đổ nhẹ
-        ) {
-            Column(
-                modifier = Modifier.padding(24.dp), // Padding bên trong Card
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = "Yêu cầu Cấp Quyền Vị trí",
-                    style = MaterialTheme.typography.headlineSmall, // Tiêu đề lớn
-                    modifier = Modifier.padding(bottom = 16.dp)
-                )
-                Text(
-                    text = "Ứng dụng cần quyền vị trí để hiển thị các trạm xe đạp gần bạn và theo dõi hành trình của bạn trên bản đồ.",
-                    style = MaterialTheme.typography.bodyMedium
-                )
-                Button(
-                    onClick = onPermissionRequested,
-                    modifier = Modifier.padding(top = 24.dp)
-                ) {
-                    Text("Tiếp tục và Cấp quyền")
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun PermissionDeniedScreen() {
-    val context = LocalContext.current
-
-    Column(
-        modifier = Modifier
-            .fillMaxSize(),
+        modifier = Modifier.fillMaxSize(),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -123,29 +102,67 @@ fun PermissionDeniedScreen() {
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Quyền Vị trí bị Từ chối",
+                    text = "Cấp Quyền Ứng Dụng",
                     style = MaterialTheme.typography.headlineSmall,
-                    modifier = Modifier.padding(bottom = 16.dp),
-                    color = MaterialTheme.colorScheme.error // Tô màu lỗi cho tiêu đề
+                    modifier = Modifier.padding(bottom = 16.dp)
                 )
-
+                // Cập nhật nội dung văn bản
                 Text(
-                    text = "Ứng dụng không thể hoạt động mà không có quyền vị trí. Vui lòng cấp quyền thủ công.",
+                    text = "Để sử dụng tính năng dẫn đường, ứng dụng cần quyền truy cập:\n\n" +
+                            "1. Vị trí: Để hiển thị bạn trên bản đồ.\n" +
+                            "2. Thông báo: Để hiển thị hướng dẫn khi bạn tắt màn hình.",
                     style = MaterialTheme.typography.bodyMedium
                 )
+                Button(
+                    onClick = onPermissionRequested,
+                    modifier = Modifier.padding(top = 24.dp)
+                ) {
+                    Text("Tiếp tục")
+                }
+            }
+        }
+    }
+}
 
+@Composable
+fun PermissionDeniedScreen() {
+    val context = LocalContext.current
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Card(
+            modifier = Modifier
+                .widthIn(max = 400.dp)
+                .padding(horizontal = 24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+        ) {
+            Column(
+                modifier = Modifier.padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = "Thiếu Quyền Quan Trọng",
+                    style = MaterialTheme.typography.headlineSmall,
+                    modifier = Modifier.padding(bottom = 16.dp),
+                    color = MaterialTheme.colorScheme.error
+                )
+                Text(
+                    text = "Bạn đã từ chối quyền Vị trí hoặc Thông báo. Ứng dụng không thể dẫn đường chính xác nếu thiếu các quyền này.\n\nVui lòng vào Cài đặt để cấp lại.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
                 Spacer(Modifier.height(24.dp))
-
                 Button(
                     onClick = {
-                        // Mở Cài đặt Ứng dụng
                         val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
                             data = Uri.fromParts("package", context.packageName, null)
                         }
                         context.startActivity(intent)
                     }
                 ) {
-                    Text("Mở Cài đặt Ứng dụng")
+                    Text("Mở Cài đặt")
                 }
             }
         }
