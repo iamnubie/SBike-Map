@@ -24,7 +24,8 @@ fun requestCyclingRoute(
     context: Context,
     mapboxNavigation: MapboxNavigation,
     origin: Point?,
-    destination: Point
+    destination: Point,
+    onRouteFound: (Double, Double) -> Unit = { _, _ -> }
 ) {
     if (origin == null) {
         Toast.makeText(context, "Đang lấy vị trí của bạn...", Toast.LENGTH_SHORT).show()
@@ -62,6 +63,17 @@ fun requestCyclingRoute(
 
             override fun onRoutesReady(routes: List<NavigationRoute>, routerOrigin: String) {
                 mapboxNavigation.setNavigationRoutes(routes)
+
+                // [ĐÃ SỬA] Truy cập vào 'directionsRoute' để lấy thông tin
+                if (routes.isNotEmpty()) {
+                    val route = routes[0]
+
+                    // Sửa dòng này: Thêm .directionsRoute
+                    val distance = route.directionsRoute.distance() // Mét
+                    val duration = route.directionsRoute.duration() // Giây
+
+                    onRouteFound(distance, duration)
+                }
             }
         }
     )
