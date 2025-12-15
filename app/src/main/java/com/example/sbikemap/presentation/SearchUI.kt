@@ -192,6 +192,15 @@ import com.mapbox.search.autocomplete.PlaceAutocomplete
 import com.mapbox.search.autocomplete.PlaceAutocompleteSuggestion
 import kotlinx.coroutines.launch
 
+val CYCLING_CATEGORIES = mapOf(
+    "Sửa xe đạp" to "bicycle_shop",
+    "Cà phê" to "coffee",
+    "Cửa hàng tiện lợi" to "convenience",
+    "Nhà vệ sinh" to "restroom",
+    "Công viên" to "park",
+    "Trạm sạc" to "charging_station",
+    "ATM" to "atm"
+)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RouteSearchBox(
@@ -200,7 +209,8 @@ fun RouteSearchBox(
     originAddress: String?,
     destinationAddress: String?,
     onOriginSelected: (Point?, String) -> Unit,      // Callback khi chọn điểm đi (Null = Vị trí của bạn)
-    onDestinationSelected: (Point?, String) -> Unit   // Callback khi chọn điểm đến
+    onDestinationSelected: (Point?, String) -> Unit,   // Callback khi chọn điểm đến
+    onCategorySelected: (String) -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -254,7 +264,10 @@ fun RouteSearchBox(
     ) {
         if (!isExpanded) {
             // 1. GIAO DIỆN THU GỌN (Giống Google Maps mặc định)
-            CompactSearchBar(onClick = onExpandRequest)
+            CompactSearchBar(
+                onClick = onExpandRequest,
+                onCategoryClick = onCategorySelected
+            )
         } else {
             // --- KHUNG NHẬP LIỆU (2 Ô) ---
             Surface(
@@ -418,9 +431,10 @@ fun RouteSearchBox(
 
 // [MỚI] Giao diện thanh tìm kiếm thu gọn (Google Maps Style)
 @Composable
-fun CompactSearchBar(onClick: () -> Unit) {
+fun CompactSearchBar(onClick: () -> Unit, onCategoryClick: (String) -> Unit) {
     // 1. Tạo InteractionSource để quản lý trạng thái click
     val interactionSource = remember { MutableInteractionSource() }
+    var showMenu by remember { mutableStateOf(false) } // State quản lý menu
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -442,10 +456,39 @@ fun CompactSearchBar(onClick: () -> Unit) {
             Text(
                 text = "Tìm địa điểm ở đây...",
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color.Gray
+                color = Color.Gray,
+                modifier = Modifier.weight(1f)
             )
-            Spacer(modifier = Modifier.weight(1f))
-            // Có thể thêm icon Avatar hoặc Mic ở đây nếu muốn giống hệt Google
+            // Nút Filter/Danh mục
+            Box {
+                IconButton(onClick = { showMenu = true }) {
+                    Icon(
+                        Icons.Default.List,
+                        contentDescription = "Danh mục",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // Menu xổ xuống
+                DropdownMenu(
+                    expanded = showMenu,
+                    onDismissRequest = { showMenu = false },
+                    modifier = Modifier.background(Color.White)
+                ) {
+                    CYCLING_CATEGORIES.forEach { (label, query) ->
+                        DropdownMenuItem(
+                            text = { Text(label, color = Color.Black) },
+                            onClick = {
+                                showMenu = false
+                                onCategoryClick(query) // Trả về từ khóa (VD: "cafe")
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Red)
+                            }
+                        )
+                    }
+                }
+            }
         }
     }
 }
