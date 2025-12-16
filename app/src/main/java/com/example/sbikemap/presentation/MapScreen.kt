@@ -1,8 +1,10 @@
 package com.example.sbikemap.presentation
 
 import android.annotation.SuppressLint
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,17 +57,22 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -73,6 +80,11 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import coil.compose.AsyncImage
+import coil.compose.SubcomposeAsyncImage
+import coil.compose.SubcomposeAsyncImageContent
+import coil.compose.rememberAsyncImagePainter
+import coil.request.ImageRequest
 import com.example.sbikemap.R
 import com.example.sbikemap.utils.OfflineUtils
 import com.example.sbikemap.utils.RouteRenderer
@@ -118,14 +130,14 @@ import com.mapbox.search.SearchCallback
 import com.mapbox.search.SearchEngine
 import com.mapbox.search.SearchEngineSettings
 import com.mapbox.search.result.SearchResult
-import com.mapbox.search.result.SearchAddress
 import com.mapbox.search.ReverseGeoOptions
-import com.mapbox.search.SearchOptions
 import com.mapbox.search.discover.Discover
 import com.mapbox.search.discover.DiscoverOptions
 import com.mapbox.search.discover.DiscoverQuery
 import com.mapbox.search.discover.DiscoverResult
 import kotlinx.coroutines.launch
+import com.example.sbikemap.utils.WeatherRepository
+import com.example.sbikemap.utils.WeatherResponse
 
 data class MapStyleItem(
     val name: String,
@@ -201,6 +213,23 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
     // State để lưu tham chiếu bản đồ dùng cho việc tính toán camera sau này
     var mapboxMapInstance by remember { mutableStateOf<com.mapbox.maps.MapboxMap?>(null) }
     val currentCategoryResults by rememberUpdatedState(categoryResults)
+
+    //WEATHER MAP
+    var weatherAtDestination by remember { mutableStateOf<WeatherResponse?>(null) }
+    // Khi chọn địa điểm mới -> Gọi API lấy thời tiết
+    LaunchedEffect(selectedDestination) {
+        if (selectedDestination != null) {
+            WeatherRepository.fetchWeather(
+                context,
+                selectedDestination!!.latitude(),
+                selectedDestination!!.longitude()
+            ) { response ->
+                weatherAtDestination = response
+            }
+        } else {
+            weatherAtDestination = null
+        }
+    }
 
     fun reverseGeocode(point: Point, isOrigin: Boolean) {
         if (isOrigin) originName = "Đang lấy địa chỉ..." else destinationName = "Đang lấy địa chỉ..."
@@ -314,7 +343,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
     val routeLineView = remember {
         MapboxRouteLineView(
             MapboxRouteLineViewOptions.Builder(context)
-                .routeLineBelowLayerId("mapbox-location-indicator-layer")
+                .routeLineBelowLayerId("road-label")
                 .build()
         )
     }
@@ -387,7 +416,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
     val mapStyles = listOf(
         MapStyleItem("Phố", Style.MAPBOX_STREETS, Icons.Default.Build),
         MapStyleItem("Vệ tinh", Style.SATELLITE_STREETS, Icons.Default.Build),
-        MapStyleItem("Địa hình", Style.TRAFFIC_DAY, Icons.Default.Build),
+        MapStyleItem("Mật độ", Style.TRAFFIC_DAY, Icons.Default.Build),
         MapStyleItem("Tối", Style.TRAFFIC_NIGHT, Icons.Default.Build)
     )
 
@@ -751,6 +780,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 else {
                     RoutePreviewBottomSheet(
                         routeInfo = routeInfo!!,
+                        weather = weatherAtDestination,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
                 }
@@ -854,52 +884,101 @@ fun getManeuverTranslation(modifier: String?, type: String?): String {
 @Composable
 fun RoutePreviewBottomSheet(
     routeInfo: RouteInfo,
+    weather: WeatherResponse?,
+    onStartNavigation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(16.dp, RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+            .shadow(16.dp, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
         color = Color.White,
-        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+        shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
-            modifier = Modifier.padding(24.dp)
+            modifier = Modifier
+                .padding(24.dp)
+                .navigationBarsPadding() // Tránh bị che bởi thanh điều hướng Android
         ) {
-            // Tiêu đề
-            Text("Thông tin tuyến đường", style = MaterialTheme.typography.titleMedium, color = Color.Gray)
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(verticalAlignment = Alignment.Bottom) {
-                // Thời gian (Màu xanh lá)
-                Text(
-                    text = formatDuration(routeInfo.durationSeconds),
-                    style = MaterialTheme.typography.headlineLarge,
-                    color = Color(0xFF0F9D58), // Google Green
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.width(12.dp))
-
-                // Khoảng cách (Màu xám)
-                Text(
-                    text = "(${formatDistance(routeInfo.distanceMeters)})",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-            }
+            // --- HEADER: Thanh nắm kéo nhỏ (Visual cue) ---
+            Box(
+                modifier = Modifier
+                    .width(40.dp)
+                    .height(4.dp)
+                    .background(Color.LightGray, RoundedCornerShape(2.dp))
+                    .align(Alignment.CenterHorizontally)
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Nút "Xem trước" (Giả lập) hoặc chỉ dẫn
-            Button(
-                onClick = { /* Có thể làm tính năng xem từng bước */ },
+            // --- NỘI DUNG CHÍNH: CHIA 2 CỘT ---
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = Color.LightGray)
+                horizontalArrangement = Arrangement.SpaceBetween, // Đẩy sang 2 bên
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Không thể dẫn đường từ vị trí này", color = Color.Black)
+                // CỘT TRÁI: Thời gian & Khoảng cách
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Thời gian dự kiến",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = Color.Gray
+                    )
+
+                    // Thời gian (Lớn, Xanh)
+                    Text(
+                        text = formatDuration(routeInfo.durationSeconds),
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = Color(0xFF0F9D58), // Google Green
+                        fontWeight = FontWeight.Bold
+                    )
+
+                    // Khoảng cách (Nhỏ hơn)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Place,
+                            contentDescription = null,
+                            tint = Color.Gray,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = formatDistance(routeInfo.distanceMeters),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Color.Gray,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
+
+                // CỘT PHẢI: Widget Thời tiết (Nếu có)
+                if (weather != null) {
+                    WeatherWidget(weather = weather)
+                }
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            // --- BUTTON HÀNH ĐỘNG ---
+//            Button(
+//                onClick = onStartNavigation,
+//                modifier = Modifier
+//                    .fillMaxWidth()
+//                    .height(56.dp), // Nút cao dễ bấm
+//                shape = RoundedCornerShape(16.dp),
+//                colors = ButtonDefaults.buttonColors(
+//                    containerColor = MaterialTheme.colorScheme.primary
+//                ),
+//                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
+//            ) {
+//                Icon(Icons.Default.PlayArrow, contentDescription = null)
+//                Spacer(modifier = Modifier.width(8.dp))
+//                Text(
+//                    text = "Bắt đầu dẫn đường", // Sửa lại text cho hợp lý
+//                    style = MaterialTheme.typography.titleMedium,
+//                    fontWeight = FontWeight.Bold
+//                )
+//            }
         }
     }
 }
@@ -918,5 +997,65 @@ fun formatDistance(meters: Double): String {
         String.format("%.1f km", meters / 1000)
     } else {
         "${meters.toInt()} m"
+    }
+}
+
+@Composable
+fun WeatherWidget(weather: WeatherResponse) {
+    val iconCode = weather.weather.firstOrNull()?.icon ?: "01d"
+    val iconUrl = "https://openweathermap.org/img/wn/${iconCode}@4x.png"
+
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = Modifier
+            .background(
+                color = Color(0xFFE3F2FD), // Nền xanh nhạt của cả cụm
+                shape = RoundedCornerShape(12.dp)
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    ) {
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                text = "${weather.main.temp.toInt()}°C",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.Black
+            )
+            Text(
+                text = weather.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() } ?: "",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color.DarkGray // <--- Màu thủ phạm gây ám màu
+            )
+        }
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // [GIẢI PHÁP MỚI: DÙNG SUBCOMPOSE ĐỂ KIỂM SOÁT]
+        SubcomposeAsyncImage(
+            model = ImageRequest.Builder(LocalContext.current)
+                .data(iconUrl)
+                .crossfade(true)
+                .build(),
+            contentDescription = "Weather Icon",
+            modifier = Modifier
+                .size(48.dp)
+                .background(Color.White, androidx.compose.foundation.shape.CircleShape) // Nền trắng
+                .padding(4.dp) // Padding để icon nằm gọn trong vòng trắng
+        ) {
+            val state = painter.state
+            if (state is coil.compose.AsyncImagePainter.State.Loading || state is coil.compose.AsyncImagePainter.State.Error) {
+                // Đang tải hoặc lỗi -> Hiện icon dấu hỏi chấm (để debug)
+                Icon(
+                    imageVector = Icons.Default.Warning, // Icon cảnh báo nếu lỗi
+                    contentDescription = null,
+                    tint = Color.Gray
+                )
+            } else {
+                // Tải thành công -> Vẽ ảnh GỐC, KHÔNG FILTER
+                SubcomposeAsyncImageContent(
+                    colorFilter = null // [CHỐT CHẶN CUỐI CÙNG] Đảm bảo không tô màu
+                )
+            }
+        }
     }
 }

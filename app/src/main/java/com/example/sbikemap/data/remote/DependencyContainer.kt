@@ -33,8 +33,8 @@ import java.util.concurrent.TimeUnit
 class AppContainer(private val applicationContext: Context) {
 
 //    private val BASE_URL = "http://10.0.2.2:3000"
-    private val BASE_URL = "http://192.168.1.4:3000"
-//    private val BASE_URL = "http://192.168.174.1:3000"
+//    private val BASE_URL = "http://192.168.1.4:3000"
+    private val BASE_URL = "http://192.168.174.1:3000"
 
     // 1. Khởi tạo TokenManager
     val tokenManager: TokenManager by lazy {
