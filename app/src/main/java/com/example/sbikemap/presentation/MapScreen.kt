@@ -59,6 +59,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
@@ -70,7 +72,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import com.example.sbikemap.R
+import com.example.sbikemap.utils.OfflineUtils
 import com.example.sbikemap.utils.RouteRenderer
 import com.example.sbikemap.utils.UserMarker
 import com.example.sbikemap.utils.bitmapFromDrawableRes
@@ -80,6 +84,7 @@ import com.mapbox.maps.plugin.locationcomponent.OnIndicatorPositionChangedListen
 // --- Navigation SDK Imports ---
 import com.mapbox.api.directions.v5.models.RouteOptions
 import com.mapbox.common.MapboxOptions
+import com.mapbox.common.TileStore
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.ResponseInfo
 import com.mapbox.maps.plugin.animation.flyTo
@@ -89,6 +94,7 @@ import com.mapbox.navigation.base.TimeFormat
 import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
 import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
 import com.mapbox.navigation.base.options.NavigationOptions
+import com.mapbox.navigation.base.options.RoutingTilesOptions
 import com.mapbox.navigation.base.route.NavigationRoute
 import com.mapbox.navigation.base.route.NavigationRouterCallback
 import com.mapbox.navigation.base.route.RouterFailure
@@ -135,7 +141,7 @@ data class RouteInfo(
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPreviewMapboxNavigationAPI::class)
 @Composable
-fun MapScreen(permissionsGranted: Boolean) {
+fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.NavController) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val START_POINT = Point.fromLngLat(105.8544, 21.0285)
@@ -235,7 +241,22 @@ fun MapScreen(permissionsGranted: Boolean) {
         if (MapboxNavigationProvider.isCreated()) {
             MapboxNavigationProvider.retrieve()
         } else {
-            MapboxNavigationProvider.create(NavigationOptions.Builder(context).build())
+            // [CẬP NHẬT] Cấu hình Offline
+            // 1. Tạo TileStore mặc định (Nơi dữ liệu Offline được lưu)
+            val tileStore = TileStore.create()
+
+            // 2. Chỉ định Navigation sử dụng TileStore này để tìm đường
+            val routingTilesOptions = RoutingTilesOptions.Builder()
+                .tileStore(tileStore)
+                .build()
+
+            // 3. Tạo Navigation Options với cấu hình Offline
+            val navOptions = NavigationOptions.Builder(context)
+                .routingTilesOptions(routingTilesOptions)
+                .build()
+
+            // 4. Khởi tạo Navigation
+            MapboxNavigationProvider.create(navOptions)
         }
     }
 
@@ -366,7 +387,7 @@ fun MapScreen(permissionsGranted: Boolean) {
     val mapStyles = listOf(
         MapStyleItem("Phố", Style.MAPBOX_STREETS, Icons.Default.Build),
         MapStyleItem("Vệ tinh", Style.SATELLITE_STREETS, Icons.Default.Build),
-        MapStyleItem("Địa hình", Style.OUTDOORS, Icons.Default.Build),
+        MapStyleItem("Địa hình", Style.TRAFFIC_DAY, Icons.Default.Build),
         MapStyleItem("Tối", Style.TRAFFIC_NIGHT, Icons.Default.Build)
     )
 
@@ -639,11 +660,20 @@ fun MapScreen(permissionsGranted: Boolean) {
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 FloatingActionButton(
-                    onClick = { showStyleSheet = true },
+                    onClick = { navController.navigate("profile") }, // Chuyển sang màn hình Profile
                     containerColor = MaterialTheme.colorScheme.surface
                 ) {
-                    Icon(Icons.Default.Edit, "Chọn lớp bản đồ")
+                    Icon(Icons.Default.Person, "Hồ sơ cá nhân")
                 }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+//                FloatingActionButton(
+//                    onClick = { showStyleSheet = true },
+//                    containerColor = MaterialTheme.colorScheme.surface
+//                ) {
+//                    Icon(Icons.Default.Edit, "Chọn lớp bản đồ")
+//                }
             }
 
             // Nút BẮT ĐẦU (Chỉ hiện khi đã chọn đích)
@@ -662,18 +692,35 @@ fun MapScreen(permissionsGranted: Boolean) {
                 }
             }
 
-            FloatingActionButton(
-                onClick = {
-                    puckBearingSource = if (puckBearingSource == PuckBearing.HEADING) PuckBearing.COURSE else PuckBearing.HEADING
-                },
+            Column(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = if (routeInfo != null && customOriginPoint != null) 200.dp else 32.dp, end = 32.dp) // Đẩy nút lên nếu có BottomSheet
+                    .padding(
+                        bottom = if (routeInfo != null && customOriginPoint != null) 200.dp else 32.dp,
+                        end = 16.dp
+                    ),
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(16.dp) // Khoảng cách giữa 2 nút
             ) {
-                Icon(
-                    if (puckBearingSource == PuckBearing.HEADING) Icons.Default.KeyboardArrowUp else Icons.Default.LocationOn,
-                    "La bàn"
-                )
+                // [THÊM MỚI] Nút Chọn Lớp Bản Đồ
+                FloatingActionButton(
+                    onClick = { showStyleSheet = true },
+                    containerColor = MaterialTheme.colorScheme.surface
+                ) {
+                    Icon(Icons.Default.Edit, "Chọn lớp bản đồ")
+                }
+
+                // Nút La Bàn/Vị Trí
+                FloatingActionButton(
+                    onClick = {
+                        puckBearingSource = if (puckBearingSource == PuckBearing.HEADING) PuckBearing.COURSE else PuckBearing.HEADING
+                    }
+                ) {
+                    Icon(
+                        if (puckBearingSource == PuckBearing.HEADING) Icons.Default.KeyboardArrowUp else Icons.Default.LocationOn,
+                        "La bàn"
+                    )
+                }
             }
             // 4. [LOGIC UI MỚI] XỬ LÝ HIỂN THỊ THÔNG TIN TUYẾN ĐƯỜNG
             if (selectedDestination != null && routeInfo != null) {

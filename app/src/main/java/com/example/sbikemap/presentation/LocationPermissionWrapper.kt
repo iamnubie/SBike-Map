@@ -30,7 +30,7 @@ import androidx.compose.runtime.remember
 @SuppressLint("PermissionLaunchedDuringComposition")
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun LocationPermissionWrapper() {
+fun LocationPermissionWrapper(navController: androidx.navigation.NavController) {
     val permissionsToRequest = remember {
         val list = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -51,7 +51,7 @@ fun LocationPermissionWrapper() {
     when {
         // Tất cả quyền đã được cấp -> Vào màn hình bản đồ
         permissionState.allPermissionsGranted -> {
-            MapScreen(permissionsGranted = true)
+            MapScreen(permissionsGranted = true, navController = navController)
         }
 
         // Cần hiện lời giải thích

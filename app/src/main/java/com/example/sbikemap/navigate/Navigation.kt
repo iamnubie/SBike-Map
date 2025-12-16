@@ -9,6 +9,7 @@ import com.example.sbikemap.presentation.LocationPermissionWrapper
 import com.example.sbikemap.presentation.LoginScreen
 import com.example.sbikemap.presentation.MapScreen
 import com.example.sbikemap.presentation.SignupScreen
+import com.example.sbikemap.presentation.UserProfileScreen
 
 @Composable
 fun Navigate(){
@@ -19,7 +20,10 @@ fun Navigate(){
         composable("home") { HomeScreen(navController)}
         composable("map_route") {
 //            MapScreen()
-            LocationPermissionWrapper()
+            LocationPermissionWrapper(navController)
+        }
+        composable("profile") {
+            UserProfileScreen(navController)
         }
     }
 }
