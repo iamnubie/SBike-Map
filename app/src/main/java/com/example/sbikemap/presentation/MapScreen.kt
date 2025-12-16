@@ -1,10 +1,8 @@
 package com.example.sbikemap.presentation
 
 import android.annotation.SuppressLint
-import android.util.Log
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -58,74 +56,49 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FloatingActionButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
-import coil.compose.AsyncImage
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
-import coil.compose.rememberAsyncImagePainter
 import coil.request.ImageRequest
 import com.example.sbikemap.R
-import com.example.sbikemap.utils.OfflineUtils
 import com.example.sbikemap.utils.RouteRenderer
 import com.example.sbikemap.utils.UserMarker
 import com.example.sbikemap.utils.bitmapFromDrawableRes
 import com.example.sbikemap.utils.requestCyclingRoute
-import com.mapbox.api.directions.v5.DirectionsCriteria
 import com.mapbox.maps.plugin.locationcomponent.OnIndicatorPositionChangedListener
-// --- Navigation SDK Imports ---
-import com.mapbox.api.directions.v5.models.RouteOptions
 import com.mapbox.common.MapboxOptions
 import com.mapbox.common.TileStore
 import com.mapbox.maps.EdgeInsets
-import com.mapbox.maps.ResponseInfo
 import com.mapbox.maps.plugin.animation.flyTo
 import com.mapbox.maps.plugin.gestures.addOnMapClickListener
 import com.mapbox.navigation.base.ExperimentalPreviewMapboxNavigationAPI
-import com.mapbox.navigation.base.TimeFormat
-import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
 import com.mapbox.navigation.base.formatter.DistanceFormatterOptions
 import com.mapbox.navigation.base.options.NavigationOptions
 import com.mapbox.navigation.base.options.RoutingTilesOptions
-import com.mapbox.navigation.base.route.NavigationRoute
-import com.mapbox.navigation.base.route.NavigationRouterCallback
-import com.mapbox.navigation.base.route.RouterFailure
 import com.mapbox.navigation.core.MapboxNavigationProvider
 import com.mapbox.navigation.core.formatter.MapboxDistanceFormatter
 import com.mapbox.navigation.core.trip.session.RouteProgressObserver
 import com.mapbox.navigation.tripdata.maneuver.api.MapboxManeuverApi
-import com.mapbox.navigation.tripdata.progress.api.MapboxTripProgressApi
 import com.mapbox.navigation.tripdata.progress.model.DistanceRemainingFormatter
-import com.mapbox.navigation.tripdata.progress.model.EstimatedTimeToArrivalFormatter
-import com.mapbox.navigation.tripdata.progress.model.PercentDistanceTraveledFormatter
 import com.mapbox.navigation.tripdata.progress.model.TimeRemainingFormatter
-import com.mapbox.navigation.tripdata.progress.model.TripProgressUpdateFormatter
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
 import com.mapbox.navigation.tripdata.maneuver.model.Maneuver
-import com.mapbox.search.CategorySearchOptions
 import com.mapbox.search.SearchCallback
 import com.mapbox.search.SearchEngine
 import com.mapbox.search.SearchEngineSettings
@@ -138,6 +111,11 @@ import com.mapbox.search.discover.DiscoverResult
 import kotlinx.coroutines.launch
 import com.example.sbikemap.utils.WeatherRepository
 import com.example.sbikemap.utils.WeatherResponse
+import com.mapbox.geojson.LineString
+import com.example.sbikemap.utils.RouteWeatherLogic
+import com.example.sbikemap.utils.RouteWeatherPoint
+import com.example.sbikemap.presentation.components.WeatherRouteMarker
+import com.mapbox.core.constants.Constants.PRECISION_6
 
 data class MapStyleItem(
     val name: String,
@@ -216,6 +194,8 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
 
     //WEATHER MAP
     var weatherAtDestination by remember { mutableStateOf<WeatherResponse?>(null) }
+    var routeWeatherList by remember { mutableStateOf<List<RouteWeatherPoint>>(emptyList()) }
+
     // Khi chọn địa điểm mới -> Gọi API lấy thời tiết
     LaunchedEffect(selectedDestination) {
         if (selectedDestination != null) {
@@ -286,6 +266,33 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
 
             // 4. Khởi tạo Navigation
             MapboxNavigationProvider.create(navOptions)
+        }
+    }
+
+    // Tự động tính toán khi routeInfo thay đổi (có đường mới hoặc xóa đường)
+    LaunchedEffect(routeInfo) {
+        if (routeInfo != null) {
+            // Lấy danh sách tuyến đường
+            val routes = mapboxNavigation.getNavigationRoutes()
+            val primaryRoute = routes.firstOrNull()
+
+            // 1. Lấy chuỗi polyline (String) bằng property (không dùng dấu ngoặc)
+            val routeGeometryStr = primaryRoute?.directionsRoute?.geometry()
+
+            // 2. Chuyển đổi String -> LineString (để dùng được với Turf/WeatherLogic)
+            // Mapbox mặc định dùng độ chính xác là 6 (PRECISION_6)
+            val geometry = if (routeGeometryStr != null) {
+                LineString.fromPolyline(routeGeometryStr, 6)
+            } else {
+                null
+            }
+
+            if (geometry != null) {
+                // Gọi hàm logic tính toán
+                routeWeatherList = RouteWeatherLogic.generateRouteWeatherMarkers(context, geometry)
+            }
+        } else {
+            routeWeatherList = emptyList()
         }
     }
 
@@ -368,7 +375,6 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 // 1. Lấy Expected (chứa List<Maneuver> hoặc Lỗi)
                 val maneuversExpected = maneuverApi.getManeuvers(routeProgress)
 
-                // 2. [SỬA LỖI QUAN TRỌNG]
                 // Thay vì trả về Maneuver (có thể null), ta trả về List (luôn không null)
                 // để thỏa mãn @NonNull của hàm fold.
                 val maneuversList = maneuversExpected.fold(
@@ -443,6 +449,11 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                         UserMarker(point = point, iconId = SEARCH_RESULT_ICON_ID)
                     }
                 }
+            }
+
+            // --- [THÊM MỚI] VẼ CÁC WEATHER MARKER LÊN TUYẾN ĐƯỜNG ---
+            routeWeatherList.forEach { weatherPoint ->
+                WeatherRouteMarker(data = weatherPoint)
             }
 
             if (permissionsGranted) {
@@ -696,13 +707,6 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
-
-//                FloatingActionButton(
-//                    onClick = { showStyleSheet = true },
-//                    containerColor = MaterialTheme.colorScheme.surface
-//                ) {
-//                    Icon(Icons.Default.Edit, "Chọn lớp bản đồ")
-//                }
             }
 
             // Nút BẮT ĐẦU (Chỉ hiện khi đã chọn đích)
@@ -958,27 +962,6 @@ fun RoutePreviewBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(32.dp))
-
-            // --- BUTTON HÀNH ĐỘNG ---
-//            Button(
-//                onClick = onStartNavigation,
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .height(56.dp), // Nút cao dễ bấm
-//                shape = RoundedCornerShape(16.dp),
-//                colors = ButtonDefaults.buttonColors(
-//                    containerColor = MaterialTheme.colorScheme.primary
-//                ),
-//                elevation = ButtonDefaults.buttonElevation(defaultElevation = 4.dp)
-//            ) {
-//                Icon(Icons.Default.PlayArrow, contentDescription = null)
-//                Spacer(modifier = Modifier.width(8.dp))
-//                Text(
-//                    text = "Bắt đầu dẫn đường", // Sửa lại text cho hợp lý
-//                    style = MaterialTheme.typography.titleMedium,
-//                    fontWeight = FontWeight.Bold
-//                )
-//            }
         }
     }
 }

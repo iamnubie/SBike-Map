@@ -46,6 +46,15 @@ interface WeatherApi {
         @Query("units") units: String = "metric", // Độ C
         @Query("lang") lang: String = "vi"        // Tiếng Việt
     ): Call<WeatherResponse>
+
+    @GET("data/2.5/weather")
+    suspend fun getCurrentWeatherSuspend(
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double,
+        @Query("appid") apiKey: String,
+        @Query("units") units: String = "metric",
+        @Query("lang") lang: String = "vi"
+    ): Response<WeatherResponse>
 }
 
 // --- 3. OBJECT QUẢN LÝ GỌI API ---
@@ -81,8 +90,15 @@ object WeatherRepository {
         })
     }
 
-    // Hàm tiện ích để lấy URL icon
-    fun getIconUrl(iconCode: String): String {
-        return "https://openweathermap.org/img/wn/$iconCode@2x.png"
+    // Lấy thời tiết cho 1 điểm (suspend)
+    suspend fun fetchWeatherSuspend(context: Context, lat: Double, lon: Double): WeatherResponse? {
+        val apiKey = context.getString(R.string.openweather_api_key)
+        return try {
+            val response = api.getCurrentWeatherSuspend(lat, lon, apiKey)
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 }

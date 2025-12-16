@@ -88,5 +88,6 @@ dependencies {
     implementation("com.mapbox.search:offline-ndk27:2.17.1")
     implementation("com.mapbox.search:mapbox-search-android-ndk27:2.17.1")
     implementation("com.mapbox.search:mapbox-search-android-ui-ndk27:2.17.1")
+    implementation("com.mapbox.mapboxsdk:mapbox-sdk-turf:7.9.0")
 
 }
