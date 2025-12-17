@@ -14,7 +14,7 @@ import com.example.sbikemap.presentation.UserProfileScreen
 @Composable
 fun Navigate(){
     val navController = rememberNavController()
-    NavHost(navController, startDestination = "map_route") {
+    NavHost(navController, startDestination = "login") {
         composable("login") { LoginScreen(navController)}
         composable("signup") { SignupScreen(navController)}
         composable("home") { HomeScreen(navController)}

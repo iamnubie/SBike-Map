@@ -23,15 +23,22 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import com.example.sbikemap.presentation.viewmodel.AuthViewModel
 import com.example.sbikemap.utils.OfflineUtils
 import com.mapbox.common.TileStore
 import com.mapbox.navigation.base.options.NavigationOptions
 import com.mapbox.navigation.base.options.RoutingTilesOptions
 import com.mapbox.navigation.core.MapboxNavigationProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun UserProfileScreen(navController: NavController) {
+fun UserProfileScreen(
+    navController: NavController,
+    viewModel: AuthViewModel = viewModel()
+) {
     val context = LocalContext.current
 
     val mapboxNavigation = remember {
@@ -144,9 +151,11 @@ fun UserProfileScreen(navController: NavController) {
             // 3. Nút Đăng xuất
             Button(
                 onClick = {
+                    viewModel.logout()
+                    Firebase.auth.signOut()
                     // Xóa backstack và về trang login
                     navController.navigate("login") {
-                        popUpTo("home") { inclusive = true }
+                        popUpTo("profile") { inclusive = true }
                     }
                 },
                 modifier = Modifier.fillMaxWidth(),

@@ -106,9 +106,5 @@ fun MapboxMapScope.RouteRenderer(
 
         // Đăng ký và Hủy đăng ký tự động
         mapboxNavigation.registerRoutesObserver(routesObserver)
-
-        // Cleanup block (khi MapEffect bị hủy)
-        // Lưu ý: MapEffect không hỗ trợ onDispose trực tiếp như DisposableEffect,
-        // nhưng logic này chạy 1 lần. Nếu cần cleanup kỹ hơn, có thể dùng DisposableEffect bên ngoài.
     }
 }
