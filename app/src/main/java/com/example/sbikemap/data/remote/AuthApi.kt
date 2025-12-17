@@ -3,9 +3,12 @@ package com.example.sbikemap.data.remote
 import com.example.sbikemap.data.remote.models.AuthRequest
 import com.example.sbikemap.data.remote.models.AuthResponse
 import com.example.sbikemap.data.remote.models.UpdateUserRequest
+import okhttp3.MultipartBody
 import retrofit2.http.Body
+import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
+import retrofit2.http.Part
 
 interface AuthApi {
     @POST("/auth/firebase-login")
@@ -18,4 +21,8 @@ interface AuthApi {
     // Thêm vào interface AuthApi
     @PATCH("users/profile/me")
     suspend fun updateProfile(@Body request: UpdateUserRequest): AuthResponse // Hoặc trả về User object tùy backend
+
+    @Multipart
+    @POST("users/upload-avatar")
+    suspend fun uploadAvatar(@Part image: MultipartBody.Part): Map<String, String> // Trả về JSON { "url": "..." }
 }

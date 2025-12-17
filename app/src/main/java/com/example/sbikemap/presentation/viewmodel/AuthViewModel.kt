@@ -1,5 +1,7 @@
 package com.example.sbikemap.presentation.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sbikemap.App
@@ -11,6 +13,11 @@ import com.example.sbikemap.utils.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.MultipartBody
+import okhttp3.RequestBody.Companion.asRequestBody
+import java.io.File
+import java.io.FileOutputStream
 import javax.inject.Inject
 
 sealed class LoginState {
@@ -43,6 +50,7 @@ class AuthViewModel : ViewModel() {
             try {
                 // 1. Gọi Backend API bằng Firebase ID Token
                 val response = repository.loginWithFirebaseToken(idToken)
+                response.avatarUrl?.let { tokenManager.saveAvatarUrl(it) }
 
                 // 2. Lưu token vào SharedPrefs/DataStore
                 tokenManager.saveAuthData(
@@ -74,6 +82,7 @@ class AuthViewModel : ViewModel() {
             }
         }
     }
+
     fun getLoggedInUserEmail(): String {
         return tokenManager.getEmail() ?: "Người dùng chưa đăng nhập"
     }
@@ -112,6 +121,51 @@ class AuthViewModel : ViewModel() {
                 onError(e.message ?: "Lỗi cập nhật tên")
             }
         }
+    }
+
+    fun uploadAvatar(
+        context: Context,
+        imageUri: Uri,
+        onSuccess: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                // 1. Chuyển Uri thành File thực tế (cần hàm helper, xem bên dưới)
+                val file = getFileFromUri(context, imageUri)
+
+                // 2. Tạo Multipart Body
+                val requestFile = file.asRequestBody("image/*".toMediaTypeOrNull())
+                val body = MultipartBody.Part.createFormData("file", file.name, requestFile)
+
+                // 3. Gọi API (Lưu ý: repository cần thêm hàm gọi authApi.uploadAvatar(body))
+                val response = repository.uploadAvatar(body)
+                val newUrl = response["url"] ?: ""
+
+                // 4. Lưu URL mới vào TokenManager để hiển thị ngay
+                tokenManager.saveAvatarUrl(newUrl)
+                onSuccess(newUrl)
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                // Xử lý lỗi
+            }
+        }
+    }
+
+    // Hàm helper để chuyển Uri -> File (Private function)
+    private fun getFileFromUri(context: Context, uri: Uri): File {
+        val inputStream = context.contentResolver.openInputStream(uri)
+        val file = File(context.cacheDir, "temp_avatar.jpg")
+        val outputStream = FileOutputStream(file)
+        inputStream?.copyTo(outputStream)
+        inputStream?.close()
+        outputStream.close()
+        return file
+    }
+
+    // để lấy ảnh từ bộ nhớ khi mở màn hình
+    fun getAvatarUrl(): String? {
+        return tokenManager.getAvatarUrl()
     }
 
     // Hàm reset trạng thái

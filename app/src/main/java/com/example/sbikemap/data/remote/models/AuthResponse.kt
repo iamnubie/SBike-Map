@@ -6,6 +6,8 @@ data class AuthResponse(
     val email: String,
     @SerializedName("username")
     val username: String,
+    @SerializedName("avatarUrl")
+    val avatarUrl: String?,
     val expiresIn: Int,
     @SerializedName("accessToken")
     val accessToken: String,

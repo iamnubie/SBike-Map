@@ -1,5 +1,7 @@
 package com.example.sbikemap.presentation
 
+import android.net.Uri
+import android.os.Build
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -38,6 +40,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import android.Manifest
+import androidx.compose.foundation.border
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.SubcomposeAsyncImage
+import coil.request.CachePolicy
+import coil.request.ImageRequest
+import coil.transform.CircleCropTransformation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -52,13 +66,12 @@ fun UserProfileScreen(
     val userEmail = viewModel.getLoggedInUserEmail()
     // State điều khiển Dialog sửa tên
     var showEditDialog by remember { mutableStateOf(false) }
+    // State lưu URL ảnh đại diện (Lấy từ bộ nhớ khi mở app)
+    var currentAvatarUrl by remember { mutableStateOf(viewModel.getAvatarUrl()) }
 
     // Lấy Tên hiển thị (Display Name)
     val firebaseUser = Firebase.auth.currentUser
     val displayName = viewModel.getLoggedInUserName()
-    // Ưu tiên lấy từ Firebase Auth, nếu không có thì lấy phần đầu email (trước @)
-//    val displayName = firebaseUser?.displayName?.takeIf { !it.isNullOrBlank() }
-//        ?: userEmail.substringBefore("@")
 
     val mapboxNavigation = remember {
         if (MapboxNavigationProvider.isCreated()) {
@@ -104,7 +117,19 @@ fun UserProfileScreen(
             UserInfoSection(
                 name = currentDisplayName,
                 email = userEmail,
-                onEditClick = { showEditDialog = true }
+                avatarUrl = currentAvatarUrl,
+                onEditClick = { showEditDialog = true },
+                onAvatarChange = { newUri ->
+                    // Xử lý khi người dùng chọn ảnh xong
+                    Toast.makeText(context, "Đang tải ảnh lên...", Toast.LENGTH_SHORT).show()
+
+                    // Gọi ViewModel để upload
+                    viewModel.uploadAvatar(context, newUri) { newUrl ->
+                        // Khi upload thành công (Callback onSuccess):
+                        currentAvatarUrl = newUrl // Cập nhật State -> UI tự đổi ảnh mới
+                        Toast.makeText(context, "Đổi ảnh đại diện thành công!", Toast.LENGTH_SHORT).show()
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -187,23 +212,107 @@ fun UserProfileScreen(
 fun UserInfoSection(
     name: String,
     email: String,
-    onEditClick: () -> Unit
+    avatarUrl: String?,
+    onEditClick: () -> Unit,
+    onAvatarChange: (Uri) -> Unit
 ) {
+    val context = LocalContext.current
+    val interactionSource = remember { MutableInteractionSource() }
+
+    // 1. Launcher chọn ảnh (Photo Picker - Chuẩn mới của Android)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        uri?.let { onAvatarChange(it) }
+    }
+
+    // 2. Launcher xin quyền (cho các máy đời cũ)
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { isGranted ->
+        if (isGranted) {
+            // Nếu được cấp quyền -> Mở Photo Picker
+            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+        } else {
+            Toast.makeText(context, "Cần quyền truy cập ảnh để đổi Avatar", Toast.LENGTH_SHORT).show()
+        }
+    }
+
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         // Avatar
         Box(
-            modifier = Modifier
-                .size(100.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
+            modifier = Modifier.wrapContentSize() // Kích thước vừa đủ ôm lấy nội dung
         ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = null,
-                modifier = Modifier.size(60.dp),
-                tint = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            // LỚP 1: AVATAR CHÍNH (Bị cắt hình tròn)
+            Box(
+                modifier = Modifier
+                    .size(120.dp) // Tăng kích thước lên chút cho đẹp
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) {
+                        // Sự kiện chạm vào ảnh để đổi
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                        }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (avatarUrl.isNullOrEmpty()) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        modifier = Modifier.size(80.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                } else {
+                    SubcomposeAsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(avatarUrl)
+                            .crossfade(true)
+                            .memoryCachePolicy(CachePolicy.DISABLED) // Tắt cache bộ nhớ (để luôn load ảnh mới nhất khi vừa đổi)
+                            .diskCachePolicy(CachePolicy.ENABLED)  // Vẫn giữ cache ổ cứng cho lần sau mở app
+                            .build(),
+                        contentDescription = "Avatar",
+                        contentScale = ContentScale.Crop, // Quan trọng: crop ảnh để lấp đầy hình tròn
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+
+            // LỚP 2: ICON MÁY ẢNH NHỎ (Nằm đè lên trên góc)
+            // Vì đặt sau trong code nên nó sẽ vẽ đè lên trên Avatar
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd) // Căn xuống góc dưới phải của BOX TỔNG
+                    .size(36.dp) // Kích thước vòng tròn trắng chứa icon
+                    // Tạo viền trùng màu nền để tạo hiệu ứng "cắt" giống Instagram
+                    .border(3.dp, MaterialTheme.colorScheme.background, CircleShape)
+                    .clip(CircleShape)
+                    .background(Color.White)
+                    .clickable( // Cũng cho phép bấm vào icon nhỏ này để đổi ảnh
+                        interactionSource = interactionSource,
+                        indication = null
+                    ) {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
+                        }
+                    }
+                    .padding(6.dp) // Padding bên trong để icon không bị sát viền
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Đổi ảnh",
+                    tint = Color.Gray,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
         Spacer(modifier = Modifier.height(16.dp))
 

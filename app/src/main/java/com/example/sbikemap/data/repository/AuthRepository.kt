@@ -4,6 +4,7 @@ import com.example.sbikemap.data.remote.AuthApi
 import com.example.sbikemap.data.remote.models.AuthRequest
 import com.example.sbikemap.data.remote.models.AuthResponse
 import com.example.sbikemap.data.remote.models.UpdateUserRequest
+import okhttp3.MultipartBody
 import javax.inject.Inject
 
 class AuthRepository @Inject constructor(
@@ -26,5 +27,9 @@ class AuthRepository @Inject constructor(
     suspend fun updateUserProfile(request: UpdateUserRequest): AuthResponse {
         // Gọi sang AuthApi -> Gửi Request PATCH lên Server
         return authApi.updateProfile(request)
+    }
+
+    suspend fun uploadAvatar(image: MultipartBody.Part): Map<String, String> {
+        return authApi.uploadAvatar(image)
     }
 }

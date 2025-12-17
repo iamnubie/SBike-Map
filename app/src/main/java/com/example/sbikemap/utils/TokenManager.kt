@@ -8,6 +8,7 @@ class TokenManager(context: Context) {
     private val ACCESS_TOKEN_KEY = "access_token"
     private val USER_EMAIL_KEY = "user_email"
     private val USER_NAME_KEY = "user_name"
+    private val AVATAR_URL_KEY = "avatar_url"
 
     // Khởi tạo SharedPreferences
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -40,11 +41,21 @@ class TokenManager(context: Context) {
         prefs.edit().putString(USER_NAME_KEY, name).apply()
     }
 
+    // Hàm lưu Avatar
+    fun saveAvatarUrl(url: String) {
+        prefs.edit().putString(AVATAR_URL_KEY, url).apply()
+    }
+
+    fun getAvatarUrl(): String? {
+        return prefs.getString(AVATAR_URL_KEY, null)
+    }
+
     fun clearAuthData() {
         prefs.edit()
             .remove(ACCESS_TOKEN_KEY)
             .remove(USER_EMAIL_KEY)
             .remove(USER_NAME_KEY)
+            .remove(AVATAR_URL_KEY)
             .apply()
     }
 }
