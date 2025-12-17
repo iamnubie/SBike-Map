@@ -70,6 +70,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
@@ -115,6 +116,7 @@ import com.mapbox.geojson.LineString
 import com.example.sbikemap.utils.RouteWeatherLogic
 import com.example.sbikemap.utils.RouteWeatherPoint
 import com.example.sbikemap.presentation.components.WeatherRouteMarker
+import com.example.sbikemap.presentation.viewmodel.MapViewModel
 import com.mapbox.core.constants.Constants.PRECISION_6
 
 data class MapStyleItem(
@@ -131,7 +133,11 @@ data class RouteInfo(
 @SuppressLint("MissingPermission")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPreviewMapboxNavigationAPI::class)
 @Composable
-fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.NavController) {
+fun MapScreen(
+    permissionsGranted: Boolean,
+    navController: androidx.navigation.NavController,
+    mapViewModel: MapViewModel = viewModel()
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val START_POINT = Point.fromLngLat(105.8544, 21.0285)
@@ -140,32 +146,20 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
 
     // State Variables
     var puckBearingSource by remember { mutableStateOf(PuckBearing.HEADING) }
-    var currentStyleUri by remember { mutableStateOf(Style.MAPBOX_STREETS) }
     var showStyleSheet by remember { mutableStateOf(false) }
     var isFirstLocate by remember { mutableStateOf(true) }
-    var userLocationPoint by remember { mutableStateOf<Point?>(null) }
-    var selectedDestination by remember { mutableStateOf<Point?>(null) }
-    var customOriginPoint by remember { mutableStateOf<Point?>(null) }
-    var routeInfo by remember { mutableStateOf<RouteInfo?>(null) }
     // Logic tính toán điểm bắt đầu thực tế
-    val actualStartPoint = customOriginPoint ?: userLocationPoint
+    val actualStartPoint = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
 
     // --- STATE CHO NAVIGATION UI ---
-    var isNavigating by remember { mutableStateOf(false) }
     var navigationState by remember { mutableStateOf(NavigationState()) }
-    // State lưu TÊN ĐỊA ĐIỂM để hiển thị lên ô nhập
-    var originName by remember { mutableStateOf("Vị trí của bạn") }
-    var destinationName by remember { mutableStateOf("") }
 
     // --- 1. KHỞI TẠO CÁC FORMATTER RIÊNG BIỆT (FIX LỖI UNRESOLVED REFERENCE) ---
     val distanceFormatterOptions = remember { DistanceFormatterOptions.Builder(context).build() }
-
     // Formatter khoảng cách (VD: 5.2 km)
     val distanceRemainingFormatter = remember { DistanceRemainingFormatter(distanceFormatterOptions) }
-
     // Formatter thời gian (VD: 15 min)
     val timeRemainingFormatter = remember { TimeRemainingFormatter(context) }
-
     // API lấy thông tin Maneuver (rẽ trái/phải)
     val maneuverApi = remember { MapboxManeuverApi(MapboxDistanceFormatter(distanceFormatterOptions)) }
 
@@ -175,44 +169,36 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
     }
     // Khởi tạo Discover API (Thay cho SearchEngine)
     val discover = remember { Discover.create() }
-
-    // 2. [ĐÃ SỬA] Khởi tạo SearchEngine với Settings mặc định (Không truyền Token vào đây)
+    // Khởi tạo SearchEngine với Settings mặc định (Không truyền Token vào đây)
     val searchEngine = remember {
         SearchEngine.createSearchEngine(
             SearchEngineSettings()
         )
     }
-    //State theo dõi việc người dùng có đang chủ động nhấn vào thanh search để tìm không
-    var isSearching by remember { mutableStateOf(false) }
     //Logic quyết định khi nào thì hiện giao diện 2 ô (Expanded)
-    val shouldShowExpandedUI = isSearching || selectedDestination != null || customOriginPoint != null
-    var categoryResults by remember { mutableStateOf<List<DiscoverResult>>(emptyList()) } //State lưu danh sách kết quả tìm kiếm theo danh mục
+    val shouldShowExpandedUI = mapViewModel.isSearching || mapViewModel.selectedDestination != null || mapViewModel.customOriginPoint != null
     val SEARCH_RESULT_ICON_ID = "SEARCH_RESULT_ICON" // ID cho icon kết quả tìm kiếm
     // State để lưu tham chiếu bản đồ dùng cho việc tính toán camera sau này
     var mapboxMapInstance by remember { mutableStateOf<com.mapbox.maps.MapboxMap?>(null) }
-    val currentCategoryResults by rememberUpdatedState(categoryResults)
-
-    //WEATHER MAP
-    var weatherAtDestination by remember { mutableStateOf<WeatherResponse?>(null) }
-    var routeWeatherList by remember { mutableStateOf<List<RouteWeatherPoint>>(emptyList()) }
+    val currentCategoryResults by rememberUpdatedState(mapViewModel.categoryResults)
 
     // Khi chọn địa điểm mới -> Gọi API lấy thời tiết
-    LaunchedEffect(selectedDestination) {
-        if (selectedDestination != null) {
+    LaunchedEffect(mapViewModel.selectedDestination) {
+        if (mapViewModel.selectedDestination != null) {
             WeatherRepository.fetchWeather(
                 context,
-                selectedDestination!!.latitude(),
-                selectedDestination!!.longitude()
+                mapViewModel.selectedDestination!!.latitude(),
+                mapViewModel.selectedDestination!!.longitude()
             ) { response ->
-                weatherAtDestination = response
+                mapViewModel.weatherAtDestination = response
             }
         } else {
-            weatherAtDestination = null
+            mapViewModel.weatherAtDestination = null
         }
     }
 
     fun reverseGeocode(point: Point, isOrigin: Boolean) {
-        if (isOrigin) originName = "Đang lấy địa chỉ..." else destinationName = "Đang lấy địa chỉ..."
+        if (isOrigin) mapViewModel.originName = "Đang lấy địa chỉ..." else mapViewModel.destinationName = "Đang lấy địa chỉ..."
 
         val options = ReverseGeoOptions(center = point, limit = 1)
 
@@ -227,12 +213,12 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 val address = results.firstOrNull()?.name
                     ?: "${point.latitude().toString().take(7)}, ${point.longitude().toString().take(7)}"
 
-                if (isOrigin) originName = address else destinationName = address
+                if (isOrigin) mapViewModel.originName = address else mapViewModel.destinationName = address
             }
 
             // Hàm trả về lỗi
             override fun onError(e: Exception) {
-                if (isOrigin) originName = "Vị trí đã chọn" else destinationName = "Vị trí đã chọn"
+                if (isOrigin) mapViewModel.originName = "Vị trí đã chọn" else mapViewModel.destinationName = "Vị trí đã chọn"
             }
         })
     }
@@ -270,8 +256,8 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
     }
 
     // Tự động tính toán khi routeInfo thay đổi (có đường mới hoặc xóa đường)
-    LaunchedEffect(routeInfo) {
-        if (routeInfo != null) {
+    LaunchedEffect(mapViewModel.routeInfo) {
+        if (mapViewModel.routeInfo != null) {
             // Lấy danh sách tuyến đường
             val routes = mapboxNavigation.getNavigationRoutes()
             val primaryRoute = routes.firstOrNull()
@@ -289,17 +275,34 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
 
             if (geometry != null) {
                 // Gọi hàm logic tính toán
-                routeWeatherList = RouteWeatherLogic.generateRouteWeatherMarkers(context, geometry)
+                mapViewModel.routeWeatherList = RouteWeatherLogic.generateRouteWeatherMarkers(context, geometry)
             }
         } else {
-            routeWeatherList = emptyList()
+            mapViewModel.routeWeatherList = emptyList()
+        }
+    }
+    // Khôi phục lại tuyến đường cũ nếu có (Quan trọng khi quay lại màn hình)
+    LaunchedEffect(Unit) {
+        // Nếu trong ViewModel đã có routeInfo nhưng MapboxNavigation lại trống (do bị destroy và tạo lại)
+        // Thì ta cần vẽ lại đường cũ (Optional: có thể phức tạp nếu không lưu route object,
+        // nhưng ít nhất các marker vẫn còn nhờ VM)
+
+        // Mẹo: Nếu mapViewModel.routeInfo != null, bạn có thể trigger lại hàm requestCyclingRoute
+        // để Mapbox vẽ lại đường đi ngay khi màn hình khởi tạo
+        if (mapViewModel.routeInfo != null && mapViewModel.selectedDestination != null) {
+            val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
+            if (start != null) {
+                requestCyclingRoute(context, mapboxNavigation, start, mapViewModel.selectedDestination!!) { _, _ ->
+                    // Không cần làm gì vì info đã có rồi
+                }
+            }
         }
     }
 
     // Hàm tìm kiếm theo danh mục (Nearby Search)
     fun searchCategoryNearby(categoryQuery: String) {
         // 1. Kiểm tra vị trí hiện tại
-        val center = userLocationPoint
+        val center = mapViewModel.userLocationPoint
         if (center == null) {
             Toast.makeText(context, "Đang lấy vị trí của bạn... Hãy thử lại sau giây lát.", Toast.LENGTH_SHORT).show()
             return
@@ -318,7 +321,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
             // 3. Xử lý kết quả trả về
             response.onValue { results ->
                 // A. Lưu kết quả vào biến State (Lưu ý: biến này phải là List<DiscoverResult>)
-                categoryResults = results
+                mapViewModel.categoryResults = results
 
                 if (results.isNotEmpty()) {
                     // B. Lấy danh sách tọa độ các điểm tìm được
@@ -356,10 +359,10 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
     }
 
     // Xử lý nút Back khi đang dẫn đường
-    BackHandler(enabled = isNavigating) {
-        isNavigating = false
-        selectedDestination = null
-        routeInfo = null
+    BackHandler(enabled = mapViewModel.isNavigating) {
+        mapViewModel.isNavigating = false
+        mapViewModel.selectedDestination = null
+        mapViewModel.routeInfo = null
         mapboxNavigation.setNavigationRoutes(emptyList())
         mapboxNavigation.mapboxReplayer.stop()
     }
@@ -368,9 +371,9 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
         onDispose { MapboxNavigationProvider.destroy() }
     }
 
-    // --- LOGIC LẮNG NGHE TIẾN TRÌNH DẪN ĐƯỜNG ---
-    DisposableEffect(isNavigating) {
-        if (isNavigating) {
+    // LOGIC LẮNG NGHE TIẾN TRÌNH DẪN ĐƯỜNG
+    DisposableEffect(mapViewModel.isNavigating) {
+        if (mapViewModel.isNavigating) {
             val progressObserver = RouteProgressObserver { routeProgress ->
                 // 1. Lấy Expected (chứa List<Maneuver> hoặc Lỗi)
                 val maneuversExpected = maneuverApi.getManeuvers(routeProgress)
@@ -431,20 +434,20 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
         MapboxMap(
             modifier = Modifier.fillMaxSize(),
             mapViewportState = mapViewportState,
-            style = { MapStyle(style = currentStyleUri) }
+            style = { MapStyle(style = mapViewModel.currentStyleUri) }
         ) {
             MapEffect(Unit) { mapView ->
                 mapboxMapInstance = mapView.mapboxMap
             }
-            if (selectedDestination != null) {
-                UserMarker(point = selectedDestination!!, iconId = DESTINATION_ICON_ID)
+            if (mapViewModel.selectedDestination != null) {
+                UserMarker(point = mapViewModel.selectedDestination!!, iconId = DESTINATION_ICON_ID)
             }
-            if (customOriginPoint != null) {
-                UserMarker(point = customOriginPoint!!, iconId = START_ICON_ID)
+            if (mapViewModel.customOriginPoint != null) {
+                UserMarker(point = mapViewModel.customOriginPoint!!, iconId = START_ICON_ID)
             }
             // VẼ MARKER CHO CÁC KẾT QUẢ TÌM ĐƯỢC
-            if (categoryResults.isNotEmpty()) {
-                categoryResults.forEach { result ->
+            if (mapViewModel.categoryResults.isNotEmpty()) {
+                mapViewModel.categoryResults.forEach { result ->
                     result.coordinate?.let { point ->
                         UserMarker(point = point, iconId = SEARCH_RESULT_ICON_ID)
                     }
@@ -452,12 +455,12 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
             }
 
             // --- [THÊM MỚI] VẼ CÁC WEATHER MARKER LÊN TUYẾN ĐƯỜNG ---
-            routeWeatherList.forEach { weatherPoint ->
+            mapViewModel.routeWeatherList.forEach { weatherPoint ->
                 WeatherRouteMarker(data = weatherPoint)
             }
 
             if (permissionsGranted) {
-                MapEffect(currentStyleUri) { mapView ->
+                MapEffect(mapViewModel.currentStyleUri) { mapView ->
                     mapView.mapboxMap.getStyle { style ->
                         val scaleFactor = 0.8
                         if (style.getStyleImage(DESTINATION_ICON_ID) == null) {
@@ -489,7 +492,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 RouteRenderer(mapboxNavigation, routeLineApi, routeLineView)
 
                 // Xử lý Click (Chỉ cho phép chọn điểm mới khi KHÔNG dẫn đường)
-                if (!isNavigating) {
+                if (!mapViewModel.isNavigating) {
                     MapEffect(Unit) { mapView ->
                         mapView.mapboxMap.addOnMapClickListener { clickedPoint ->
 
@@ -517,14 +520,14 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
 
                                 if (matchedResult != null) {
                                     // A. Click TRÚNG Marker kết quả
-                                    selectedDestination = matchedResult.coordinate // Lấy tọa độ chính xác của quán
-                                    destinationName = matchedResult.name // Lấy đúng tên quán
+                                    mapViewModel.selectedDestination = matchedResult.coordinate // Lấy tọa độ chính xác của quán
+                                    mapViewModel.destinationName = matchedResult.name // Lấy đúng tên quán
                                     Toast.makeText(context, "Đã chọn: ${matchedResult.name}", Toast.LENGTH_SHORT).show()
 
                                     // Vẽ đường ngay lập tức
-                                    val start = customOriginPoint ?: userLocationPoint
+                                    val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
                                     requestCyclingRoute(context, mapboxNavigation, start, matchedResult.coordinate) { dist, dur ->
-                                        routeInfo = RouteInfo(dist, dur)
+                                        mapViewModel.routeInfo = RouteInfo(dist, dur)
                                     }
 
                                     // KHÔNG XÓA categoryResults ĐỂ USER CÓ THỂ CHỌN ĐIỂM KHÁC
@@ -538,19 +541,19 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                             // TRƯỜNG HỢP 2: KHÔNG CÓ MARKER (CLICK BẢN ĐỒ BÌNH THƯỜNG)
                             else {
                                 // Nếu đã có đích đến (đang hiện BottomSheet) thì chặn click (phải bấm X mới chọn lại được)
-                                if (selectedDestination != null) {
+                                if (mapViewModel.selectedDestination != null) {
                                     return@addOnMapClickListener false
                                 }
 
                                 // Chọn điểm bất kỳ trên bản đồ
-                                selectedDestination = clickedPoint
+                                mapViewModel.selectedDestination = clickedPoint
                                 reverseGeocode(clickedPoint, isOrigin = false) // Lấy tên đường
                                 Toast.makeText(context, "Đã chọn điểm trên bản đồ", Toast.LENGTH_SHORT).show()
 
                                 // Vẽ đường
-                                val start = customOriginPoint ?: userLocationPoint
+                                val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
                                 requestCyclingRoute(context, mapboxNavigation, start, clickedPoint) { dist, dur ->
-                                    routeInfo = RouteInfo(dist, dur)
+                                    mapViewModel.routeInfo = RouteInfo(dist, dur)
                                 }
                             }
                             true
@@ -571,7 +574,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                         val listener = object : OnIndicatorPositionChangedListener {
                             override fun onIndicatorPositionChanged(point: Point) {
                                 mapView.location.removeOnIndicatorPositionChangedListener(this)
-                                userLocationPoint = point
+                                mapViewModel.userLocationPoint = point
                                 mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(10.0).build())
                                 mapViewportState.transitionToFollowPuckState(
                                     FollowPuckViewportStateOptions.Builder()
@@ -595,8 +598,8 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 }
 
                 // Camera logic riêng khi đang dẫn đường (Zoom sát hơn, nghiêng map)
-                MapEffect(isNavigating) {
-                    if (isNavigating) {
+                MapEffect(mapViewModel.isNavigating) {
+                    if (mapViewModel.isNavigating) {
                         mapViewportState.transitionToFollowPuckState(
                             FollowPuckViewportStateOptions.Builder()
                                 .bearing(FollowPuckViewportStateBearing.SyncWithLocationPuck)
@@ -606,14 +609,14 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                         )
                     }
                 }
-                // [THÊM MỚI] MapEffect tự động zoom bao quát lộ trình khi điểm đi/đến thay đổi
-                MapEffect(selectedDestination, customOriginPoint) { mapView ->
-                    if (selectedDestination != null) {
-                        val start = customOriginPoint ?: userLocationPoint
+                // MapEffect tự động zoom bao quát lộ trình khi điểm đi/đến thay đổi
+                MapEffect(mapViewModel.selectedDestination, mapViewModel.customOriginPoint) { mapView ->
+                    if (mapViewModel.selectedDestination != null) {
+                        val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
                         if (start != null) {
                             // Tính toán khung hình chứa cả điểm đi và điểm đến
                             val cameraOptions = mapView.mapboxMap.cameraForCoordinates(
-                                listOf(start, selectedDestination!!),
+                                listOf(start, mapViewModel.selectedDestination!!),
                                 com.mapbox.maps.EdgeInsets(160.0, 100.0, 300.0, 100.0) // Padding: Trên, Trái, Dưới, Phải
                             )
 
@@ -625,14 +628,14 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
             }
         }
 
-        // --- LAYER UI DẪN ĐƯỜNG (Overlay) ---
-        if (isNavigating) {
+        // LAYER UI DẪN ĐƯỜNG (Overlay)
+        if (mapViewModel.isNavigating) {
             TurnByTurnOverlay(
                 navState = navigationState,
                 onCancelNavigation = {
-                    isNavigating = false
-                    selectedDestination = null
-                    routeInfo = null
+                    mapViewModel.isNavigating = false
+                    mapViewModel.selectedDestination = null
+                    mapViewModel.routeInfo = null
                     mapboxNavigation.setNavigationRoutes(emptyList())
                 }
             )
@@ -642,51 +645,51 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
             // Đặt Search Bar ở đây để nó nằm trên bản đồ
             RouteSearchBox(
                 isExpanded = shouldShowExpandedUI,
-                onExpandRequest = { isSearching = true },
-                originAddress = originName,
-                destinationAddress = destinationName,
+                onExpandRequest = { mapViewModel.isSearching = true },
+                originAddress = mapViewModel.originName,
+                destinationAddress = mapViewModel.destinationName,
                 onOriginSelected = { point, name ->
                     // 1. Cập nhật điểm đi
-                    customOriginPoint = point // Nếu point = null nghĩa là user chọn "Vị trí của bạn"
-                    originName = name // Cập nhật tên ngay khi chọn từ list
-                    if (name == "Vị trí của bạn") originName = "Vị trí của bạn"
+                    mapViewModel.customOriginPoint = point // Nếu point = null nghĩa là user chọn "Vị trí của bạn"
+                    mapViewModel.originName = name // Cập nhật tên ngay khi chọn từ list
+                    if (name == "Vị trí của bạn") mapViewModel.originName = "Vị trí của bạn"
 
                     // 2. Nếu đã có điểm đến -> Tự động vẽ đường lại
-                    if (selectedDestination != null) {
-                        val start = point ?: userLocationPoint
-                        requestCyclingRoute(context, mapboxNavigation, start, selectedDestination!!) { dist, dur ->
-                            routeInfo = RouteInfo(dist, dur)
+                    if (mapViewModel.selectedDestination != null) {
+                        val start = point ?: mapViewModel.userLocationPoint
+                        requestCyclingRoute(context, mapboxNavigation, start, mapViewModel.selectedDestination!!) { dist, dur ->
+                            mapViewModel.routeInfo = RouteInfo(dist, dur)
                         }
                     }
                 },
                 onDestinationSelected = { point, name ->
                     // Cập nhật điểm đến
-                    selectedDestination = point
-                    destinationName = name ?: "" // Cập nhật tên ngay khi chọn từ list (hoặc rỗng nếu xóa)
+                    mapViewModel.selectedDestination = point
+                    mapViewModel.destinationName = name ?: "" // Cập nhật tên ngay khi chọn từ list (hoặc rỗng nếu xóa)
                     if (point == null) {
                         // TRƯỜNG HỢP XÓA (BẤM X):
-                        routeInfo = null // 1. Xóa thông tin khoảng cách/thời gian
+                        mapViewModel.routeInfo = null // 1. Xóa thông tin khoảng cách/thời gian
                         mapboxNavigation.setNavigationRoutes(emptyList()) // 2. Xóa đường vẽ trên map
                         //Tắt chế độ đang tìm kiếm -> UI sẽ tự thu gọn lại
-                        isSearching = false
-                        categoryResults = emptyList()
+                        mapViewModel.isSearching = false
+                        mapViewModel.categoryResults = emptyList()
                     } else {
                         // Khi chọn được điểm -> Tắt chế độ tìm, nhưng UI vẫn Expand do (selectedDestination != null)
-                        isSearching = false
+                        mapViewModel.isSearching = false
                         // Cũng nên xóa marker kết quả category nếu người dùng chọn từ autocomplete
-                        categoryResults = emptyList()
+                        mapViewModel.categoryResults = emptyList()
                         // TRƯỜNG HỢP CHỌN ĐIỂM MỚI:
-                        val start = customOriginPoint ?: userLocationPoint
+                        val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
                         requestCyclingRoute(context, mapboxNavigation, start, point) { dist, dur ->
-                            routeInfo = RouteInfo(dist, dur)
+                            mapViewModel.routeInfo = RouteInfo(dist, dur)
                         }
                     }
                 },
                 // Xử lý khi chọn danh mục
                 onCategorySelected = { categoryQuery ->
                     // 1. Reset các trạng thái cũ
-                    selectedDestination = null
-                    routeInfo = null
+                    mapViewModel.selectedDestination = null
+                    mapViewModel.routeInfo = null
                     mapboxNavigation.setNavigationRoutes(emptyList())
 
                     // 2. Gọi hàm tìm kiếm
@@ -710,9 +713,9 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
             }
 
             // Nút BẮT ĐẦU (Chỉ hiện khi đã chọn đích)
-            if (selectedDestination != null) {
+            if (mapViewModel.selectedDestination != null) {
                 ExtendedFloatingActionButton(
-                    onClick = { isNavigating = true }, // Kích hoạt UI dẫn đường
+                    onClick = { mapViewModel.isNavigating = true }, // Kích hoạt UI dẫn đường
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .padding(32.dp),
@@ -729,7 +732,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
                     .padding(
-                        bottom = if (routeInfo != null && customOriginPoint != null) 200.dp else 32.dp,
+                        bottom = if (mapViewModel.routeInfo != null && mapViewModel.customOriginPoint != null) 200.dp else 32.dp,
                         end = 16.dp
                     ),
                 horizontalAlignment = Alignment.End,
@@ -756,12 +759,12 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 }
             }
             // 4. [LOGIC UI MỚI] XỬ LÝ HIỂN THỊ THÔNG TIN TUYẾN ĐƯỜNG
-            if (selectedDestination != null && routeInfo != null) {
+            if (mapViewModel.selectedDestination != null && mapViewModel.routeInfo != null) {
 
                 // TRƯỜNG HỢP 1: Đi từ vị trí hiện tại -> HIỆN NÚT START
-                if (customOriginPoint == null) {
+                if (mapViewModel.customOriginPoint == null) {
                     ExtendedFloatingActionButton(
-                        onClick = { isNavigating = true },
+                        onClick = { mapViewModel.isNavigating = true },
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .padding(32.dp),
@@ -774,7 +777,7 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                             Text("Bắt đầu", fontWeight = FontWeight.Bold)
                             // Hiện luôn thời gian trên nút
                             Text(
-                                text = "${formatDuration(routeInfo!!.durationSeconds)} • ${formatDistance(routeInfo!!.distanceMeters)}",
+                                text = "${formatDuration(mapViewModel.routeInfo!!.durationSeconds)} • ${formatDistance(mapViewModel.routeInfo!!.distanceMeters)}",
                                 style = MaterialTheme.typography.bodySmall
                             )
                         }
@@ -783,15 +786,15 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                 // TRƯỜNG HỢP 2: Điểm đi Tùy chỉnh -> HIỆN BOTTOM SHEET PREVIEW
                 else {
                     RoutePreviewBottomSheet(
-                        routeInfo = routeInfo!!,
-                        weather = weatherAtDestination,
+                        routeInfo = mapViewModel.routeInfo!!,
+                        weather = mapViewModel.weatherAtDestination,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
                 }
             }
             // Nếu đang mở rộng thanh search nhưng chưa chọn điểm -> Thu gọn lại
-            BackHandler(enabled = isSearching && selectedDestination == null) {
-                isSearching = false
+            BackHandler(enabled = mapViewModel.isSearching && mapViewModel.selectedDestination == null) {
+                mapViewModel.isSearching = false
             }
         }
 
@@ -803,8 +806,8 @@ fun MapScreen(permissionsGranted: Boolean, navController: androidx.navigation.Na
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     mapStyles.forEach { style ->
-                        StyleOptionItem(style, currentStyleUri == style.styleUri) {
-                            currentStyleUri = style.styleUri
+                        StyleOptionItem(style, mapViewModel.currentStyleUri == style.styleUri) {
+                            mapViewModel.currentStyleUri = style.styleUri
                             showStyleSheet = false
                         }
                     }
@@ -1036,7 +1039,7 @@ fun WeatherWidget(weather: WeatherResponse) {
             } else {
                 // Tải thành công -> Vẽ ảnh GỐC, KHÔNG FILTER
                 SubcomposeAsyncImageContent(
-                    colorFilter = null // [CHỐT CHẶN CUỐI CÙNG] Đảm bảo không tô màu
+                    colorFilter = null //  Đảm bảo không tô màu
                 )
             }
         }
