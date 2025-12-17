@@ -32,6 +32,12 @@ import com.mapbox.navigation.core.MapboxNavigationProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import android.widget.Toast
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -40,12 +46,24 @@ fun UserProfileScreen(
     viewModel: AuthViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    // State lưu tên hiển thị trên UI (Khởi tạo từ ViewModel)
+    var currentDisplayName by remember { mutableStateOf(viewModel.getLoggedInUserName()) }
+    // Lấy Email từ ViewModel (Giống HomeScreen)
+    val userEmail = viewModel.getLoggedInUserEmail()
+    // State điều khiển Dialog sửa tên
+    var showEditDialog by remember { mutableStateOf(false) }
+
+    // Lấy Tên hiển thị (Display Name)
+    val firebaseUser = Firebase.auth.currentUser
+    val displayName = viewModel.getLoggedInUserName()
+    // Ưu tiên lấy từ Firebase Auth, nếu không có thì lấy phần đầu email (trước @)
+//    val displayName = firebaseUser?.displayName?.takeIf { !it.isNullOrBlank() }
+//        ?: userEmail.substringBefore("@")
 
     val mapboxNavigation = remember {
         if (MapboxNavigationProvider.isCreated()) {
             MapboxNavigationProvider.retrieve()
         } else {
-            // Cấu hình giống hệt bên MapScreen
             val tileStore = TileStore.create()
             val routingTilesOptions = RoutingTilesOptions.Builder()
                 .tileStore(tileStore)
@@ -57,7 +75,6 @@ fun UserProfileScreen(
         }
     }
 
-    // Hủy Navigation khi rời khỏi màn hình Profile để tránh rò rỉ bộ nhớ
     DisposableEffect(Unit) {
         onDispose {
             MapboxNavigationProvider.destroy()
@@ -83,31 +100,11 @@ fun UserProfileScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 1. Phần Avatar và Tên (Placeholder)
-            Box(
-                modifier = Modifier
-                    .size(100.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    modifier = Modifier.size(60.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                text = "Người dùng SBike",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                text = "user@example.com",
-                style = MaterialTheme.typography.bodyMedium,
-                color = Color.Gray
+            // Phần Avatar và Tên
+            UserInfoSection(
+                name = currentDisplayName,
+                email = userEmail,
+                onEditClick = { showEditDialog = true }
             )
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -115,7 +112,6 @@ fun UserProfileScreen(
             // 2. Danh sách chức năng
             HorizontalDivider()
 
-            // Mục Cài đặt chung (Ví dụ)
             ProfileOptionItem(
                 icon = Icons.Default.Settings,
                 title = "Cài đặt chung",
@@ -131,29 +127,25 @@ fun UserProfileScreen(
                 iconTint = MaterialTheme.colorScheme.primary,
                 iconModifier = Modifier.rotate(90f)
             ) {
-                // Gọi hàm tải, truyền mapboxNavigation vừa tạo ở trên
                 OfflineUtils.downloadOfflineRegion(context, mapboxNavigation)
             }
 
-            // [QUAN TRỌNG] Mục Xóa dữ liệu Offline
             ProfileOptionItem(
                 icon = Icons.Default.Delete,
                 title = "Xóa bản đồ Offline (Q12)",
                 subtitle = "Giải phóng bộ nhớ máy",
                 iconTint = Color.Red
             ) {
-                // Gọi hàm xóa từ OfflineUtils
                 OfflineUtils.removeOfflineRegion(context)
             }
 
-            Spacer(modifier = Modifier.weight(1f)) // Đẩy nút đăng xuất xuống dưới
+            Spacer(modifier = Modifier.weight(1f))
 
             // 3. Nút Đăng xuất
             Button(
                 onClick = {
                     viewModel.logout()
                     Firebase.auth.signOut()
-                    // Xóa backstack và về trang login
                     navController.navigate("login") {
                         popUpTo("profile") { inclusive = true }
                     }
@@ -166,10 +158,132 @@ fun UserProfileScreen(
                 Text("Đăng xuất", color = Color.Red)
             }
         }
+        // [LOGIC DIALOG SỬA TÊN]
+        if (showEditDialog) {
+            EditNameDialog(
+                currentName = currentDisplayName,
+                onDismiss = { showEditDialog = false },
+                onConfirm = { newName ->
+                    // Gọi ViewModel cập nhật
+                    viewModel.updateUserName(
+                        newName = newName,
+                        onSuccess = {
+                            // Cập nhật UI ngay lập tức
+                            currentDisplayName = newName
+                            showEditDialog = false
+                            Toast.makeText(context, "Đổi tên thành công!", Toast.LENGTH_SHORT).show()
+                        },
+                        onError = { errorMsg ->
+                            Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
+                        }
+                    )
+                }
+            )
+        }
     }
 }
 
-// Composable con để vẽ từng dòng tùy chọn cho đẹp
+@Composable
+fun UserInfoSection(
+    name: String,
+    email: String,
+    onEditClick: () -> Unit
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        // Avatar
+        Box(
+            modifier = Modifier
+                .size(100.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = null,
+                modifier = Modifier.size(60.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Row chứa Tên và Nút sửa
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center, // Căn giữa cả hàng
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            // Việc này giúp cân bằng trái phải, đẩy Text vào chính giữa màn hình
+            Box(modifier = Modifier.size(48.dp))
+
+            // 2. Tên User
+            Text(
+                text = name,
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                // Thêm các thuộc tính này để xử lý nếu tên quá dài
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                maxLines = 1,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false) // fill=false để text chỉ chiếm chỗ nó cần, không giãn hết mức
+            )
+
+            // 3. Nút Edit bên phải
+            IconButton(onClick = onEditClick) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Sửa tên",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+        }
+
+        Text(
+            text = email,
+            style = MaterialTheme.typography.bodyMedium,
+            color = Color.Gray
+        )
+    }
+}
+
+@Composable
+fun EditNameDialog(
+    currentName: String,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var text by remember { mutableStateOf(currentName) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Đổi tên hiển thị") },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text("Tên mới") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    if (text.isNotBlank()) onConfirm(text)
+                }
+            ) {
+                Text("Lưu")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy")
+            }
+        }
+    )
+}
+
 @Composable
 fun ProfileOptionItem(
     icon: ImageVector,

@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.sbikemap.App
 import com.example.sbikemap.data.remote.AppContainer
 import com.example.sbikemap.data.remote.models.AuthResponse
+import com.example.sbikemap.data.remote.models.UpdateUserRequest
 import com.example.sbikemap.data.repository.AuthRepository
 import com.example.sbikemap.utils.TokenManager
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,7 +45,11 @@ class AuthViewModel : ViewModel() {
                 val response = repository.loginWithFirebaseToken(idToken)
 
                 // 2. Lưu token vào SharedPrefs/DataStore
-                tokenManager.saveAuthData(response.accessToken, response.email)
+                tokenManager.saveAuthData(
+                    response.accessToken,
+                    response.email,
+                    response.username
+                )
 
                 _authState.value = AuthState.Success(response)
             } catch (e: Exception) {
@@ -72,6 +77,9 @@ class AuthViewModel : ViewModel() {
     fun getLoggedInUserEmail(): String {
         return tokenManager.getEmail() ?: "Người dùng chưa đăng nhập"
     }
+    fun getLoggedInUserName(): String {
+        return tokenManager.getName() ?: "Người dùng SBike"
+    }
 
     fun handleFirebaseRegister(idToken: String) {
         _authState.value = AuthState.Loading
@@ -86,15 +94,28 @@ class AuthViewModel : ViewModel() {
         }
     }
 
+    // Hàm update tên
+    fun updateUserName(newName: String, onSuccess: () -> Unit, onError: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                // 1. Gọi API Backend
+                val request = UpdateUserRequest(username = newName)
+                // Lưu ý: repository cần thêm hàm updateProfile gọi sang api.updateProfile(request)
+                repository.updateUserProfile(request)
+
+                // 2. Nếu API không lỗi -> Lưu tên mới vào máy
+                tokenManager.saveUserName(newName)
+
+                // 3. Báo về UI thành công
+                onSuccess()
+            } catch (e: Exception) {
+                onError(e.message ?: "Lỗi cập nhật tên")
+            }
+        }
+    }
+
     // Hàm reset trạng thái
     fun resetState() {
         _authState.value = AuthState.Idle
     }
-
-    // Hàm này phải được gọi trong CoroutineScope
-//    suspend fun logoutBackend() {
-//        // Chỉ cần gọi Repository. Nếu có lỗi mạng, nó sẽ throw Exception
-//        // Bạn sẽ bắt Exception này trong HomeScreen
-//        repository.logoutUser()
-//    }
 }

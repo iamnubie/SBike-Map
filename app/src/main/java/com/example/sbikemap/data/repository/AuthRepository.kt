@@ -3,6 +3,7 @@ package com.example.sbikemap.data.repository
 import com.example.sbikemap.data.remote.AuthApi
 import com.example.sbikemap.data.remote.models.AuthRequest
 import com.example.sbikemap.data.remote.models.AuthResponse
+import com.example.sbikemap.data.remote.models.UpdateUserRequest
 import javax.inject.Inject
 
 class AuthRepository @Inject constructor(
@@ -19,5 +20,11 @@ class AuthRepository @Inject constructor(
         // Gọi hàm API. Retrofit sẽ tự động thêm Authorization Header (Bearer Token)
         // nếu đã cấu hình OkHttpClient Interceptor (Rất quan trọng cho các request đã bảo vệ)
         authApi.logout()
+    }
+
+    // Hàm Cập nhật Profile (Sửa tên)
+    suspend fun updateUserProfile(request: UpdateUserRequest): AuthResponse {
+        // Gọi sang AuthApi -> Gửi Request PATCH lên Server
+        return authApi.updateProfile(request)
     }
 }
