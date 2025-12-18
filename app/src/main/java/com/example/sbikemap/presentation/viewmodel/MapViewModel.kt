@@ -10,6 +10,7 @@ import com.example.sbikemap.utils.RouteWeatherPoint
 import com.example.sbikemap.utils.WeatherResponse
 import com.mapbox.geojson.Point
 import com.mapbox.maps.Style
+import com.mapbox.navigation.base.route.NavigationRoute
 import com.mapbox.search.discover.DiscoverResult
 
 // ViewModel chịu trách nhiệm lưu giữ trạng thái của bản đồ
@@ -38,5 +39,6 @@ class MapViewModel : ViewModel() {
 
     // 5. Trạng thái tìm kiếm UI
     var isSearching by mutableStateOf(false)
+    var currentRoutes by mutableStateOf<List<NavigationRoute>>(emptyList())
 
 }

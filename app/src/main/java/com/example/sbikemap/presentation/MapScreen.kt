@@ -119,6 +119,10 @@ import com.example.sbikemap.utils.RouteWeatherPoint
 import com.example.sbikemap.presentation.components.WeatherRouteMarker
 import com.example.sbikemap.presentation.viewmodel.MapViewModel
 import com.mapbox.core.constants.Constants.PRECISION_6
+import com.mapbox.navigation.base.route.NavigationRoute
+import com.mapbox.turf.TurfConstants
+import com.mapbox.turf.TurfMeasurement
+import com.mapbox.turf.TurfMisc
 
 data class MapStyleItem(
     val name: String,
@@ -283,18 +287,26 @@ fun MapScreen(
         }
     }
     // Khôi phục lại tuyến đường cũ nếu có (Quan trọng khi quay lại màn hình)
+    // Khôi phục lại tuyến đường cũ nếu có (Quan trọng khi quay lại màn hình)
     LaunchedEffect(Unit) {
-        // Nếu trong ViewModel đã có routeInfo nhưng MapboxNavigation lại trống (do bị destroy và tạo lại)
-        // Thì ta cần vẽ lại đường cũ (Optional: có thể phức tạp nếu không lưu route object,
-        // nhưng ít nhất các marker vẫn còn nhờ VM)
-
-        // Mẹo: Nếu mapViewModel.routeInfo != null, bạn có thể trigger lại hàm requestCyclingRoute
-        // để Mapbox vẽ lại đường đi ngay khi màn hình khởi tạo
         if (mapViewModel.routeInfo != null && mapViewModel.selectedDestination != null) {
-            val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
-            if (start != null) {
-                requestCyclingRoute(context, mapboxNavigation, start, mapViewModel.selectedDestination!!) { _, _ ->
-                    // Không cần làm gì vì info đã có rồi
+
+            // Kiểm tra xem trong ViewModel đã lưu danh sách tuyến đường chưa.
+            // Nếu có rồi -> Set luôn vào Mapbox (Vẽ ngay lập tức, KHÔNG TỐN API)
+            if (mapViewModel.currentRoutes.isNotEmpty()) {
+                mapboxNavigation.setNavigationRoutes(mapViewModel.currentRoutes)
+            }
+            // Nếu chưa có (hoặc bị mất) -> Mới phải gọi API tải lại
+            else {
+                val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
+                if (start != null) {
+                    // Cập nhật callback nhận vào 'routes' thay vì '_ , _'
+                    requestCyclingRoute(context, mapboxNavigation, start, mapViewModel.selectedDestination!!) { routes ->
+                        // Cập nhật lại danh sách routes vào ViewModel để lần sau dùng lại
+                        if (routes.isNotEmpty()) {
+                            mapViewModel.currentRoutes = routes
+                        }
+                    }
                 }
             }
         }
@@ -430,6 +442,18 @@ fun MapScreen(
         MapStyleItem("Tối", Style.TRAFFIC_NIGHT, Icons.Default.Build)
     )
 
+    // Hàm helper để cập nhật thông tin tuyến đường lên UI
+    fun updateRouteInfo(routes: List<NavigationRoute>) {
+        if (routes.isNotEmpty()) {
+            val primaryRoute = routes[0] // Tuyến đầu tiên luôn là tuyến chính
+            mapViewModel.routeInfo = RouteInfo(
+                distanceMeters = primaryRoute.directionsRoute.distance(),
+                durationSeconds = primaryRoute.directionsRoute.duration()
+            )
+            mapViewModel.currentRoutes = routes // Lưu vào VM
+        }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         // --- BẢN ĐỒ ---
         MapboxMap(
@@ -497,67 +521,112 @@ fun MapScreen(
                     MapEffect(Unit) { mapView ->
                         mapView.mapboxMap.addOnMapClickListener { clickedPoint ->
 
-                            // Lấy danh sách kết quả MỚI NHẤT từ biến rememberUpdatedState
-                            val results = currentCategoryResults
+                            // --- TRƯỜNG HỢP 1: KIỂM TRA CHẠM VÀO TUYẾN ĐƯỜNG (DÙNG TURF) ---
+                            // Mục đích: Cho phép user chọn tuyến đường thay thế (màu xám)
+                            val currentList = mapViewModel.currentRoutes.toMutableList()
+                            var closestRoute: com.mapbox.navigation.base.route.NavigationRoute? = null
+                            var minDistance = Double.MAX_VALUE
+                            val TOUCH_THRESHOLD_METERS = 50.0 // Khoảng cách nhận diện click (50m)
 
-                            // TRƯỜNG HỢP 1: ĐANG HIỂN THỊ DANH SÁCH KẾT QUẢ (MARKERS)
+                            // Duyệt qua tất cả các tuyến đường đang hiển thị
+                            // Duyệt qua tất cả các tuyến đường đang hiển thị
+                            for (route in currentList) {
+                                val routeGeometryStr = route.directionsRoute.geometry()
+                                if (routeGeometryStr != null) {
+                                    val lineString = LineString.fromPolyline(routeGeometryStr, 6)
+
+                                    // [SỬA LẠI ĐOẠN NÀY]
+                                    // 1. Tìm điểm nằm trên sợi dây (tuyến đường) gần chỗ click nhất
+                                    val nearestFeature = TurfMisc.nearestPointOnLine(clickedPoint, lineString.coordinates())
+                                    val snappedPoint = nearestFeature.geometry() as? com.mapbox.geojson.Point
+
+                                    if (snappedPoint != null) {
+                                        // 2. Đo khoảng cách từ ngón tay (clickedPoint) đến điểm đó (snappedPoint)
+                                        val distance = TurfMeasurement.distance(
+                                            clickedPoint,
+                                            snappedPoint,
+                                            TurfConstants.UNIT_METERS
+                                        )
+
+                                        // Tìm tuyến gần nhất
+                                        if (distance < minDistance) {
+                                            minDistance = distance
+                                            closestRoute = route
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Nếu chạm trúng một tuyến đường (khoảng cách < 50m)
+                            if (closestRoute != null && minDistance < TOUCH_THRESHOLD_METERS) {
+                                // Nếu tuyến đó chưa phải là tuyến chính (Index 0) -> Đảo lên đầu
+                                if (currentList.indexOf(closestRoute) != 0) {
+                                    currentList.remove(closestRoute)
+                                    currentList.add(0, closestRoute!!)
+
+                                    // Mapbox vẽ lại: Tuyến đầu xanh, tuyến sau xám
+                                    mapboxNavigation.setNavigationRoutes(currentList)
+
+                                    // Cập nhật thông tin UI (Giờ/Phút)
+                                    updateRouteInfo(currentList)
+
+                                    Toast.makeText(context, "Đã chọn tuyến đường khác", Toast.LENGTH_SHORT).show()
+                                }
+                                // Đã xử lý xong click đường -> Dừng lại (không check marker nữa)
+                                return@addOnMapClickListener true
+                            }
+
+                            // --- TRƯỜNG HỢP 2: KIỂM TRA CHẠM VÀO MARKER KẾT QUẢ ---
+                            val results = currentCategoryResults // Lấy danh sách kết quả mới nhất
+                            val screenPoint = mapView.mapboxMap.pixelForCoordinate(clickedPoint) // Tọa độ pixel
+
                             if (results.isNotEmpty()) {
-                                // Tính toán va chạm dựa trên PIXEL màn hình (Chính xác hơn độ)
-                                val clickScreenPoint = mapView.mapboxMap.pixelForCoordinate(clickedPoint)
-                                val touchRadiusPx = 70.0 // Bán kính chạm khoảng 50 pixel (ngón tay)
+                                val touchRadiusPx = 70.0 // Bán kính chạm (pixel)
 
                                 val matchedResult = results.find { result ->
-                                    // Chuyển tọa độ Marker thành tọa độ màn hình (x, y)
                                     val markerScreenPoint = mapView.mapboxMap.pixelForCoordinate(result.coordinate)
-
-                                    // Tính khoảng cách giữa ngón tay và Marker
-                                    val dx = clickScreenPoint.x - markerScreenPoint.x
-                                    val dy = clickScreenPoint.y - markerScreenPoint.y
-                                    val distance = Math.sqrt(dx * dx + dy * dy)
-
-                                    // Nếu khoảng cách < 50px -> Coi như đã click trúng
-                                    distance < touchRadiusPx
+                                    val dx = screenPoint.x - markerScreenPoint.x
+                                    val dy = screenPoint.y - markerScreenPoint.y
+                                    // Tính khoảng cách giữa ngón tay và Marker trên màn hình
+                                    Math.sqrt(dx * dx + dy * dy) < touchRadiusPx
                                 }
 
                                 if (matchedResult != null) {
-                                    // A. Click TRÚNG Marker kết quả
-                                    mapViewModel.selectedDestination = matchedResult.coordinate // Lấy tọa độ chính xác của quán
-                                    mapViewModel.destinationName = matchedResult.name // Lấy đúng tên quán
+                                    // A. Click TRÚNG Marker
+                                    mapViewModel.selectedDestination = matchedResult.coordinate
+                                    mapViewModel.destinationName = matchedResult.name
                                     Toast.makeText(context, "Đã chọn: ${matchedResult.name}", Toast.LENGTH_SHORT).show()
 
-                                    // Vẽ đường ngay lập tức
+                                    // Vẽ đường
                                     val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
-                                    requestCyclingRoute(context, mapboxNavigation, start, matchedResult.coordinate) { dist, dur ->
-                                        mapViewModel.routeInfo = RouteInfo(dist, dur)
+                                    // [LƯU Ý] Hàm này cần trả về danh sách routes để hỗ trợ alternative
+                                    requestCyclingRoute(context, mapboxNavigation, start, matchedResult.coordinate) { routes ->
+                                        updateRouteInfo(routes)
                                     }
-
-                                    // KHÔNG XÓA categoryResults ĐỂ USER CÓ THỂ CHỌN ĐIỂM KHÁC
-                                    // categoryResults = emptyList() <--- Đã bỏ dòng này theo ý bạn
                                 } else {
-                                    // B. Click TRƯỢT ra ngoài khoảng trống khi đang hiện list
-                                    // -> Không làm gì cả (Return false) để tránh chọn nhầm điểm lung tung
+                                    // B. Click TRƯỢT Marker khi đang hiện list -> Bỏ qua
                                     return@addOnMapClickListener false
                                 }
                             }
-                            // TRƯỜNG HỢP 2: KHÔNG CÓ MARKER (CLICK BẢN ĐỒ BÌNH THƯỜNG)
+                            // --- TRƯỜNG HỢP 3: CHỌN ĐIỂM BẤT KỲ TRÊN BẢN ĐỒ ---
                             else {
-                                // Nếu đã có đích đến (đang hiện BottomSheet) thì chặn click (phải bấm X mới chọn lại được)
+                                // Nếu đã chọn đích rồi (đang hiện BottomSheet) thì chặn click lung tung
                                 if (mapViewModel.selectedDestination != null) {
                                     return@addOnMapClickListener false
                                 }
 
-                                // Chọn điểm bất kỳ trên bản đồ
+                                // Chọn điểm mới
                                 mapViewModel.selectedDestination = clickedPoint
-                                reverseGeocode(clickedPoint, isOrigin = false) // Lấy tên đường
+                                reverseGeocode(clickedPoint, isOrigin = false)
                                 Toast.makeText(context, "Đã chọn điểm trên bản đồ", Toast.LENGTH_SHORT).show()
 
                                 // Vẽ đường
                                 val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
-                                requestCyclingRoute(context, mapboxNavigation, start, clickedPoint) { dist, dur ->
-                                    mapViewModel.routeInfo = RouteInfo(dist, dur)
+                                requestCyclingRoute(context, mapboxNavigation, start, clickedPoint) { routes ->
+                                    updateRouteInfo(routes)
                                 }
                             }
-                            true
+                            true // Báo hiệu đã nhận sự kiện click
                         }
                     }
                 }
@@ -658,8 +727,8 @@ fun MapScreen(
                     // 2. Nếu đã có điểm đến -> Tự động vẽ đường lại
                     if (mapViewModel.selectedDestination != null) {
                         val start = point ?: mapViewModel.userLocationPoint
-                        requestCyclingRoute(context, mapboxNavigation, start, mapViewModel.selectedDestination!!) { dist, dur ->
-                            mapViewModel.routeInfo = RouteInfo(dist, dur)
+                        requestCyclingRoute(context, mapboxNavigation, start, mapViewModel.selectedDestination!!) { routes ->
+                            updateRouteInfo(routes)
                         }
                     }
                 },
@@ -681,8 +750,8 @@ fun MapScreen(
                         mapViewModel.categoryResults = emptyList()
                         // TRƯỜNG HỢP CHỌN ĐIỂM MỚI:
                         val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
-                        requestCyclingRoute(context, mapboxNavigation, start, point) { dist, dur ->
-                            mapViewModel.routeInfo = RouteInfo(dist, dur)
+                        requestCyclingRoute(context, mapboxNavigation, start, point) { routes ->
+                            updateRouteInfo(routes)
                         }
                     }
                 },
