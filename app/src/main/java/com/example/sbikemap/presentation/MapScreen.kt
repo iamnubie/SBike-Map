@@ -70,6 +70,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
@@ -454,7 +455,7 @@ fun MapScreen(
                 }
             }
 
-            // --- [THÊM MỚI] VẼ CÁC WEATHER MARKER LÊN TUYẾN ĐƯỜNG ---
+            // VẼ CÁC WEATHER MARKER LÊN TUYẾN ĐƯỜNG
             mapViewModel.routeWeatherList.forEach { weatherPoint ->
                 WeatherRouteMarker(data = weatherPoint)
             }
@@ -743,7 +744,11 @@ fun MapScreen(
                     onClick = { showStyleSheet = true },
                     containerColor = MaterialTheme.colorScheme.surface
                 ) {
-                    Icon(Icons.Default.Edit, "Chọn lớp bản đồ")
+                    Icon(
+                        painter = painterResource(id = R.drawable.layers),
+                        contentDescription = "Chọn lớp bản đồ",
+                        modifier = Modifier.size(24.dp),
+                    )
                 }
 
                 // Nút La Bàn/Vị Trí
@@ -752,13 +757,21 @@ fun MapScreen(
                         puckBearingSource = if (puckBearingSource == PuckBearing.HEADING) PuckBearing.COURSE else PuckBearing.HEADING
                     }
                 ) {
-                    Icon(
-                        if (puckBearingSource == PuckBearing.HEADING) Icons.Default.KeyboardArrowUp else Icons.Default.LocationOn,
-                        "La bàn"
-                    )
+                    if (puckBearingSource == PuckBearing.HEADING) {
+                        Icon(
+                            painter = painterResource(id = R.drawable.direction),
+                            contentDescription = "La bàn",
+                            modifier = Modifier.size(24.dp)
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = "Vị trí"
+                        )
+                    }
                 }
             }
-            // 4. [LOGIC UI MỚI] XỬ LÝ HIỂN THỊ THÔNG TIN TUYẾN ĐƯỜNG
+            // XỬ LÝ HIỂN THỊ THÔNG TIN TUYẾN ĐƯỜNG
             if (mapViewModel.selectedDestination != null && mapViewModel.routeInfo != null) {
 
                 // TRƯỜNG HỢP 1: Đi từ vị trí hiện tại -> HIỆN NÚT START
