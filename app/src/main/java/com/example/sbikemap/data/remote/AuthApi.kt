@@ -9,6 +9,7 @@ import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
+import retrofit2.Response
 
 interface AuthApi {
     @POST("/auth/firebase-login")
@@ -25,4 +26,9 @@ interface AuthApi {
     @Multipart
     @POST("users/upload-avatar")
     suspend fun uploadAvatar(@Part image: MultipartBody.Part): Map<String, String> // Trả về JSON { "url": "..." }
+
+    //Cập nhật thể trạng (Cân nặng)
+    @POST("users/update-profile")
+    @JvmSuppressWildcards // Bắt buộc khi dùng Map
+    suspend fun updateUserPhysicalStats(@Body body: Map<String, Any>): Response<Any>
 }

@@ -26,11 +26,13 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.runtime.remember
+import androidx.navigation.NavController
+import com.example.sbikemap.presentation.viewmodel.MapViewModel
 
 @SuppressLint("PermissionLaunchedDuringComposition")
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun LocationPermissionWrapper(navController: androidx.navigation.NavController) {
+fun LocationPermissionWrapper(navController: NavController, mapViewModel: MapViewModel) {
     val permissionsToRequest = remember {
         val list = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -51,7 +53,11 @@ fun LocationPermissionWrapper(navController: androidx.navigation.NavController) 
     when {
         // Tất cả quyền đã được cấp -> Vào màn hình bản đồ
         permissionState.allPermissionsGranted -> {
-            MapScreen(permissionsGranted = true, navController = navController)
+            MapScreen(
+                permissionsGranted = true,
+                navController = navController,
+                mapViewModel = mapViewModel
+            )
         }
 
         // Cần hiện lời giải thích

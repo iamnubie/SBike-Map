@@ -62,8 +62,12 @@ class AppContainer(private val applicationContext: Context) {
     }
 
     // 4. Khởi tạo AuthApi
-    private val authApi: AuthApi by lazy {
+    val authApi: AuthApi by lazy {
         retrofit.create(AuthApi::class.java)
+    }
+
+    val tripApi: TripApi by lazy {
+        retrofit.create(TripApi::class.java)
     }
 
     // 5. Khởi tạo AuthRepository

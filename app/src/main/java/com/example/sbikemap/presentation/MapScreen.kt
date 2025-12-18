@@ -61,6 +61,8 @@ import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
@@ -120,6 +122,9 @@ import com.example.sbikemap.presentation.components.WeatherRouteMarker
 import com.example.sbikemap.presentation.viewmodel.MapViewModel
 import com.mapbox.core.constants.Constants.PRECISION_6
 import com.mapbox.navigation.base.route.NavigationRoute
+import com.mapbox.navigation.base.trip.model.RouteLegProgress
+import com.mapbox.navigation.base.trip.model.RouteProgress
+import com.mapbox.navigation.core.arrival.ArrivalObserver
 import com.mapbox.turf.TurfConstants
 import com.mapbox.turf.TurfMeasurement
 import com.mapbox.turf.TurfMisc
@@ -186,6 +191,56 @@ fun MapScreen(
     // State để lưu tham chiếu bản đồ dùng cho việc tính toán camera sau này
     var mapboxMapInstance by remember { mutableStateOf<com.mapbox.maps.MapboxMap?>(null) }
     val currentCategoryResults by rememberUpdatedState(mapViewModel.categoryResults)
+    val mapViewportState = rememberMapViewportState {
+        setCameraOptions {
+            zoom(10.0)
+            center(START_POINT)
+            pitch(0.0)
+            bearing(0.0)
+        }
+    }
+    val mapboxNavigation = remember {
+        if (MapboxNavigationProvider.isCreated()) {
+            MapboxNavigationProvider.retrieve()
+        } else {
+            // [CẬP NHẬT] Cấu hình Offline
+            // 1. Tạo TileStore mặc định (Nơi dữ liệu Offline được lưu)
+            val tileStore = TileStore.create()
+
+            // 2. Chỉ định Navigation sử dụng TileStore này để tìm đường
+            val routingTilesOptions = RoutingTilesOptions.Builder()
+                .tileStore(tileStore)
+                .build()
+
+            // 3. Tạo Navigation Options với cấu hình Offline
+            val navOptions = NavigationOptions.Builder(context)
+                .routingTilesOptions(routingTilesOptions)
+                .build()
+
+            // 4. Khởi tạo Navigation
+            MapboxNavigationProvider.create(navOptions)
+        }
+    }
+
+    // Hàm xử lý hoàn thành chuyến đi (Lưu và thoát)
+    val onFinishTrip = {
+        val currentRoute = mapViewModel.routeInfo
+        // Chỉ lưu nếu chuyến đi > 10 giây để tránh spam
+        if (currentRoute != null && currentRoute.durationSeconds > 10) {
+            mapViewModel.saveTripToHistory(
+                context = context,
+                durationSeconds = currentRoute.durationSeconds,
+                distanceMeters = currentRoute.distanceMeters,
+                userWeightKg = 65.0
+            )
+        }
+
+        // Reset trạng thái
+        mapViewModel.isNavigating = false
+        mapViewModel.routeInfo = null
+        mapViewModel.selectedDestination = null
+        mapboxNavigation.setNavigationRoutes(emptyList())
+    }
 
     // Khi chọn địa điểm mới -> Gọi API lấy thời tiết
     LaunchedEffect(mapViewModel.selectedDestination) {
@@ -228,37 +283,7 @@ fun MapScreen(
         })
     }
 
-    val mapViewportState = rememberMapViewportState {
-        setCameraOptions {
-            zoom(10.0)
-            center(START_POINT)
-            pitch(0.0)
-            bearing(0.0)
-        }
-    }
 
-    val mapboxNavigation = remember {
-        if (MapboxNavigationProvider.isCreated()) {
-            MapboxNavigationProvider.retrieve()
-        } else {
-            // [CẬP NHẬT] Cấu hình Offline
-            // 1. Tạo TileStore mặc định (Nơi dữ liệu Offline được lưu)
-            val tileStore = TileStore.create()
-
-            // 2. Chỉ định Navigation sử dụng TileStore này để tìm đường
-            val routingTilesOptions = RoutingTilesOptions.Builder()
-                .tileStore(tileStore)
-                .build()
-
-            // 3. Tạo Navigation Options với cấu hình Offline
-            val navOptions = NavigationOptions.Builder(context)
-                .routingTilesOptions(routingTilesOptions)
-                .build()
-
-            // 4. Khởi tạo Navigation
-            MapboxNavigationProvider.create(navOptions)
-        }
-    }
 
     // Tự động tính toán khi routeInfo thay đổi (có đường mới hoặc xóa đường)
     LaunchedEffect(mapViewModel.routeInfo) {
@@ -286,7 +311,6 @@ fun MapScreen(
             mapViewModel.routeWeatherList = emptyList()
         }
     }
-    // Khôi phục lại tuyến đường cũ nếu có (Quan trọng khi quay lại màn hình)
     // Khôi phục lại tuyến đường cũ nếu có (Quan trọng khi quay lại màn hình)
     LaunchedEffect(Unit) {
         if (mapViewModel.routeInfo != null && mapViewModel.selectedDestination != null) {
@@ -373,7 +397,9 @@ fun MapScreen(
 
     // Xử lý nút Back khi đang dẫn đường
     BackHandler(enabled = mapViewModel.isNavigating) {
+        // Nếu bấm Back khi đang dẫn đường -> Hỏi hoặc thoát dẫn đường
         mapViewModel.isNavigating = false
+        // Nếu muốn hủy chuyến đi thì reset hết
         mapViewModel.selectedDestination = null
         mapViewModel.routeInfo = null
         mapboxNavigation.setNavigationRoutes(emptyList())
@@ -388,7 +414,7 @@ fun MapScreen(
     DisposableEffect(mapViewModel.isNavigating) {
         if (mapViewModel.isNavigating) {
             val progressObserver = RouteProgressObserver { routeProgress ->
-                // 1. Lấy Expected (chứa List<Maneuver> hoặc Lỗi)
+                // Lấy Expected (chứa List<Maneuver> hoặc Lỗi)
                 val maneuversExpected = maneuverApi.getManeuvers(routeProgress)
 
                 // Thay vì trả về Maneuver (có thể null), ta trả về List (luôn không null)
@@ -398,14 +424,14 @@ fun MapScreen(
                     { it }                     // Nếu OK -> Trả về list kết quả
                 )
 
-                // 3. Lấy phần tử đầu tiên một cách an toàn
+                // Lấy phần tử đầu tiên một cách an toàn
                 val currentManeuver = maneuversList.firstOrNull()
 
-                // 4. Format dữ liệu
+                //  Format dữ liệu
                 val distanceStr = distanceRemainingFormatter.format(routeProgress.distanceRemaining.toDouble())
                 val timeStr = timeRemainingFormatter.format(routeProgress.durationRemaining)
 
-                // 5. Cập nhật UI State
+                // Cập nhật UI State
                 navigationState = NavigationState(
                     maneuverIcon = when {
                         currentManeuver?.primary?.modifier?.contains("left") == true -> Icons.Default.ArrowBack
@@ -421,12 +447,34 @@ fun MapScreen(
                     distanceRemaining = distanceStr.toString()
                 )
             }
+            // 2. Observer đến nơi (Arrival)
+            val arrivalObserver = object : ArrivalObserver {
+
+                // Hàm này BẮT BUỘC phải có (dù không dùng cũng phải để trống)
+                // Chạy khi đến các điểm dừng trung gian (waypoints)
+                override fun onWaypointArrival(routeProgress: RouteProgress) {
+                    // Nếu bạn không có điểm dừng giữa đường thì để trống
+                }
+
+                // Hàm này chạy khi ĐẾN ĐÍCH CUỐI CÙNG
+                override fun onFinalDestinationArrival(routeProgress: RouteProgress) {
+                    onFinishTrip()
+                    Toast.makeText(context, "Đã đến nơi! Chuyến đi đã được lưu.", Toast.LENGTH_LONG).show()
+                }
+
+                // Hàm này chạy khi bắt đầu chặng tiếp theo
+                override fun onNextRouteLegStart(routeLegProgress: RouteLegProgress) {
+                    // Không cần xử lý gì đặc biệt
+                }
+            }
 
             mapboxNavigation.registerRouteProgressObserver(progressObserver)
+            mapboxNavigation.registerArrivalObserver(arrivalObserver)
             mapboxNavigation.startTripSession()
 
             onDispose {
                 mapboxNavigation.unregisterRouteProgressObserver(progressObserver)
+                mapboxNavigation.unregisterArrivalObserver(arrivalObserver)
                 mapboxNavigation.stopTripSession()
             }
         } else {
@@ -700,15 +748,33 @@ fun MapScreen(
 
         // LAYER UI DẪN ĐƯỜNG (Overlay)
         if (mapViewModel.isNavigating) {
-            TurnByTurnOverlay(
-                navState = navigationState,
-                onCancelNavigation = {
-                    mapViewModel.isNavigating = false
-                    mapViewModel.selectedDestination = null
-                    mapViewModel.routeInfo = null
-                    mapboxNavigation.setNavigationRoutes(emptyList())
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 1. THANH CHỈ DẪN TRÊN CÙNG
+                TurnByTurnOverlay(
+                    navState = navigationState,
+                    onCancelNavigation = { }
+                )
+
+                // 2. BẢNG ĐIỀU KHIỂN DƯỚI ĐÁY (GỌI HÀM MỚI TẠO)
+                Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                    NavigationBottomPanel(
+                        navState = navigationState,
+                        destinationName = mapViewModel.destinationName,
+                        onCancel = {
+                            // HÀNH ĐỘNG HỦY (CLICK)
+                            mapViewModel.isNavigating = false
+                            mapViewModel.selectedDestination = null
+                            mapViewModel.routeInfo = null
+                            mapboxNavigation.setNavigationRoutes(emptyList())
+                            Toast.makeText(context, "Đã hủy chuyến đi", Toast.LENGTH_SHORT).show()
+                        },
+                        onSave = {
+                            // HÀNH ĐỘNG LƯU (LONG CLICK)
+                            onFinishTrip() // Gọi hàm lưu chuyến đi đã viết sẵn
+                        }
+                    )
                 }
-            )
+            }
         }
         // --- UI CŨ (Nút bấm, Style Selector) ---
         else if (permissionsGranted) {
@@ -766,21 +832,6 @@ fun MapScreen(
                     searchCategoryNearby(categoryQuery)
                 },
             )
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = 190.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                FloatingActionButton(
-                    onClick = { navController.navigate("profile") }, // Chuyển sang màn hình Profile
-                    containerColor = MaterialTheme.colorScheme.surface
-                ) {
-                    Icon(Icons.Default.Person, "Hồ sơ cá nhân")
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-            }
 
             // Nút BẮT ĐẦU (Chỉ hiện khi đã chọn đích)
             if (mapViewModel.selectedDestination != null) {
@@ -800,44 +851,38 @@ fun MapScreen(
 
             Column(
                 modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(
-                        bottom = if (mapViewModel.routeInfo != null && mapViewModel.customOriginPoint != null) 200.dp else 32.dp,
-                        end = 16.dp
-                    ),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(16.dp) // Khoảng cách giữa 2 nút
+                    .align(Alignment.TopEnd)
+                    .padding(top = if (shouldShowExpandedUI) 200.dp else 120.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
             ) {
-                // [THÊM MỚI] Nút Chọn Lớp Bản Đồ
+                // Nút Profile
                 FloatingActionButton(
-                    onClick = { showStyleSheet = true },
-                    containerColor = MaterialTheme.colorScheme.surface
+                    onClick = { navController.navigate("profile") },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    Icon(
-                        painter = painterResource(id = R.drawable.layers),
-                        contentDescription = "Chọn lớp bản đồ",
-                        modifier = Modifier.size(24.dp),
-                    )
+                    Icon(Icons.Default.Person, "Hồ sơ cá nhân", modifier = Modifier.size(24.dp))
                 }
 
-                // Nút La Bàn/Vị Trí
+                // Nút chọn lớp bản đồ
+                FloatingActionButton(
+                    onClick = { showStyleSheet = true },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(painter = painterResource(id = R.drawable.layers), contentDescription = "Chọn lớp bản đồ", modifier = Modifier.size(24.dp))
+                }
+
+                // Nút định vị / La bàn
                 FloatingActionButton(
                     onClick = {
                         puckBearingSource = if (puckBearingSource == PuckBearing.HEADING) PuckBearing.COURSE else PuckBearing.HEADING
-                    }
+                    },
+                    modifier = Modifier.size(48.dp)
                 ) {
-                    if (puckBearingSource == PuckBearing.HEADING) {
-                        Icon(
-                            painter = painterResource(id = R.drawable.direction),
-                            contentDescription = "La bàn",
-                            modifier = Modifier.size(24.dp)
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = "Vị trí"
-                        )
-                    }
+                    if (puckBearingSource == PuckBearing.HEADING) Icon(painter = painterResource(id = R.drawable.direction), contentDescription = "La bàn", modifier = Modifier.size(24.dp))
+                    else Icon(imageVector = Icons.Default.LocationOn, contentDescription = "Vị trí", modifier = Modifier.size(24.dp))
                 }
             }
             // XỬ LÝ HIỂN THỊ THÔNG TIN TUYẾN ĐƯỜNG

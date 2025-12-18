@@ -47,17 +47,28 @@ import androidx.compose.foundation.clickable
 import android.Manifest
 import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.LocationOn
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.input.KeyboardType
 import coil.compose.SubcomposeAsyncImage
 import coil.request.CachePolicy
 import coil.request.ImageRequest
 import coil.transform.CircleCropTransformation
+import com.example.sbikemap.data.remote.models.TripHistoryItem
+import com.example.sbikemap.presentation.viewmodel.ProfileViewModel
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import androidx.compose.foundation.lazy.items
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun UserProfileScreen(
     navController: NavController,
-    viewModel: AuthViewModel = viewModel()
+    viewModel: AuthViewModel = viewModel(),
+    profileViewModel: ProfileViewModel
 ) {
     val context = LocalContext.current
     // State lưu tên hiển thị trên UI (Khởi tạo từ ViewModel)
@@ -72,6 +83,21 @@ fun UserProfileScreen(
     // Lấy Tên hiển thị (Display Name)
     val firebaseUser = Firebase.auth.currentUser
     val displayName = viewModel.getLoggedInUserName()
+
+    // State nhập cân nặng
+    var weightInput by remember { mutableStateOf("") }
+    // 1. Load lịch sử & cân nặng khi mở màn hình
+    LaunchedEffect(Unit) {
+        profileViewModel.fetchTripHistory()
+        // Nếu bạn có API lấy profile, gọi ở đây để lấy cân nặng hiện tại
+    }
+
+    // 2. Cập nhật ô nhập khi có dữ liệu cân nặng từ ViewModel
+    LaunchedEffect(profileViewModel.userWeight) {
+        if (profileViewModel.userWeight > 0) {
+            weightInput = profileViewModel.userWeight.toString()
+        }
+    }
 
     val mapboxNavigation = remember {
         if (MapboxNavigationProvider.isCreated()) {
@@ -88,11 +114,11 @@ fun UserProfileScreen(
         }
     }
 
-    DisposableEffect(Unit) {
-        onDispose {
-            MapboxNavigationProvider.destroy()
-        }
-    }
+//    DisposableEffect(Unit) {
+//        onDispose {
+//            MapboxNavigationProvider.destroy()
+//        }
+//    }
 
     Scaffold(
         topBar = {
@@ -106,81 +132,144 @@ fun UserProfileScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Phần Avatar và Tên
-            UserInfoSection(
-                name = currentDisplayName,
-                email = userEmail,
-                avatarUrl = currentAvatarUrl,
-                onEditClick = { showEditDialog = true },
-                onAvatarChange = { newUri ->
-                    // Xử lý khi người dùng chọn ảnh xong
-                    Toast.makeText(context, "Đang tải ảnh lên...", Toast.LENGTH_SHORT).show()
+            // --- PHẦN 1: THÔNG TIN USER (AVATAR, TÊN) ---
+            item {
+                UserInfoSection(
+                    name = currentDisplayName,
+                    email = userEmail,
+                    avatarUrl = currentAvatarUrl,
+                    onEditClick = { showEditDialog = true },
+                    onAvatarChange = { newUri ->
+                        Toast.makeText(context, "Đang tải ảnh lên...", Toast.LENGTH_SHORT).show()
+                        viewModel.uploadAvatar(context, newUri) { newUrl ->
+                            currentAvatarUrl = newUrl
+                            Toast.makeText(context, "Đổi ảnh đại diện thành công!", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
 
-                    // Gọi ViewModel để upload
-                    viewModel.uploadAvatar(context, newUri) { newUrl ->
-                        // Khi upload thành công (Callback onSuccess):
-                        currentAvatarUrl = newUrl // Cập nhật State -> UI tự đổi ảnh mới
-                        Toast.makeText(context, "Đổi ảnh đại diện thành công!", Toast.LENGTH_SHORT).show()
+            // --- PHẦN 2: CẬP NHẬT THỂ TRẠNG (CÂN NẶNG) ---
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8))
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Text(
+                            text = "Thể trạng (Dùng để tính Calo)",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            OutlinedTextField(
+                                value = weightInput,
+                                onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) weightInput = it },
+                                label = { Text("Cân nặng (kg)") },
+                                placeholder = { Text("VD: 65") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f),
+                                trailingIcon = { Text("kg", modifier = Modifier.padding(end = 8.dp)) }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    val w = weightInput.toDoubleOrNull()
+                                    if (w != null && w > 0) {
+                                        // Gọi hàm update trong ProfileViewModel
+                                        profileViewModel.saveUserWeight(w, context)
+                                    }
+                                },
+                                enabled = weightInput.isNotEmpty()
+                            ) {
+                                Text("Lưu")
+                            }
+                        }
                     }
                 }
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 2. Danh sách chức năng
-            HorizontalDivider()
-
-            ProfileOptionItem(
-                icon = Icons.Default.Settings,
-                title = "Cài đặt chung",
-                subtitle = "Ngôn ngữ, Giao diện"
-            ) {
-                // TODO: Navigate to general settings
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider()
             }
 
-            ProfileOptionItem(
-                icon = Icons.Default.ExitToApp,
-                title = "Tải bản đồ Offline (Q12)",
-                subtitle = "Tải dữ liệu bản đồ & dẫn đường",
-                iconTint = MaterialTheme.colorScheme.primary,
-                iconModifier = Modifier.rotate(90f)
-            ) {
-                OfflineUtils.downloadOfflineRegion(context, mapboxNavigation)
+            // --- PHẦN 3: CÁC TÙY CHỌN (Offline Map...) ---
+            item {
+                ProfileOptionItem(Icons.Default.Settings, "Cài đặt chung", "Ngôn ngữ, Giao diện") {}
+
+                ProfileOptionItem(
+                    icon = Icons.Default.ExitToApp,
+                    title = "Tải bản đồ Offline (Q12)",
+                    subtitle = "Tải dữ liệu bản đồ & dẫn đường",
+                    iconModifier = Modifier.rotate(90f)
+                ) { OfflineUtils.downloadOfflineRegion(context, mapboxNavigation) }
+
+                ProfileOptionItem(
+                    icon = Icons.Default.Delete,
+                    title = "Xóa bản đồ Offline (Q12)",
+                    subtitle = "Giải phóng bộ nhớ máy",
+                    iconTint = Color.Red
+                ) { OfflineUtils.removeOfflineRegion(context) }
+
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider()
+                Spacer(modifier = Modifier.height(16.dp))
             }
 
-            ProfileOptionItem(
-                icon = Icons.Default.Delete,
-                title = "Xóa bản đồ Offline (Q12)",
-                subtitle = "Giải phóng bộ nhớ máy",
-                iconTint = Color.Red
-            ) {
-                OfflineUtils.removeOfflineRegion(context)
+            // --- PHẦN 4: LỊCH SỬ CHUYẾN ĐI ---
+            item {
+                Text(
+                    text = "Lịch sử chuyến đi",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
+                )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            // Render danh sách chuyến đi từ ProfileViewModel
+            if (profileViewModel.tripHistory.isEmpty()) {
+                item {
+                    Text(
+                        text = "Chưa có chuyến đi nào.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(vertical = 16.dp)
+                    )
+                }
+            } else {
+                items(profileViewModel.tripHistory) { trip ->
+                    TripHistoryCard(trip)
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+            }
 
-            // 3. Nút Đăng xuất
-            Button(
-                onClick = {
-                    viewModel.logout()
-                    Firebase.auth.signOut()
-                    navController.navigate("login") {
-                        popUpTo("profile") { inclusive = true }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer)
-            ) {
-                Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color.Red)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Đăng xuất", color = Color.Red)
+            // --- PHẦN 5: ĐĂNG XUẤT (Cuối cùng) ---
+            item {
+                Spacer(modifier = Modifier.height(32.dp))
+                Button(
+                    onClick = {
+                        viewModel.logout()
+                        Firebase.auth.signOut()
+                        navController.navigate("login") {
+                            popUpTo("profile") { inclusive = true }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+                ) {
+                    Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color.Red)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Đăng xuất", color = Color.Red)
+                }
+                Spacer(modifier = Modifier.height(32.dp)) // Padding đáy
             }
         }
         // [LOGIC DIALOG SỬA TÊN]
@@ -424,4 +513,76 @@ fun ProfileOptionItem(
             }
         }
     }
+}
+
+@Composable
+fun TripHistoryCard(trip: TripHistoryItem) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Ngày giờ
+            Text(
+                text = formatDate(trip.startTime),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color.Gray
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Từ -> Đến
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = trip.originName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+            // Đường kẻ nối
+            Box(modifier = Modifier.padding(start = 7.dp).height(12.dp).width(2.dp).background(Color.LightGray))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(text = trip.destinationName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Thông số
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                TripStat("Quãng đường", "${String.format("%.1f", trip.distanceMeters / 1000)} km")
+                TripStat("Thời gian", formatDurationHistory(trip.durationSeconds))
+                TripStat("Calo", "${trip.caloriesBurned.toInt()} kcal")
+            }
+        }
+    }
+}
+
+@Composable
+fun TripStat(label: String, value: String) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+    }
+}
+
+// Hàm format ngày giờ
+fun formatDate(isoString: String): String {
+    return try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val parsed = ZonedDateTime.parse(isoString)
+            parsed.format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"))
+        } else {
+            isoString.take(10) // Fallback cho Android cũ
+        }
+    } catch (e: Exception) {
+        isoString
+    }
+}
+
+// Hàm format thời gian (riêng cho History)
+fun formatDurationHistory(seconds: Double): String {
+    val minutes = (seconds / 60).toInt()
+    return if (minutes < 60) "$minutes phút" else "${minutes/60}h ${minutes%60}p"
 }

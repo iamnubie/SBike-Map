@@ -15,20 +15,30 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import com.example.sbikemap.data.remote.AppContainer
 import com.example.sbikemap.navigate.Navigate
 import com.example.sbikemap.ui.theme.SBikeMapTheme
 import com.google.firebase.FirebaseApp
+import com.mapbox.navigation.core.MapboxNavigationProvider
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         FirebaseApp.initializeApp(this)
+        val appContainer = AppContainer(applicationContext)
         enableEdgeToEdge()
         setContent {
             SBikeMapTheme {
-                Navigate()
+                Navigate(container = appContainer)
             }
+        }
+    }
+    override fun onDestroy() {
+        super.onDestroy()
+        // Kiểm tra xem Mapbox đã được tạo chưa, nếu có thì hủy để giải phóng bộ nhớ
+        if (MapboxNavigationProvider.isCreated()) {
+            MapboxNavigationProvider.destroy()
         }
     }
 }
