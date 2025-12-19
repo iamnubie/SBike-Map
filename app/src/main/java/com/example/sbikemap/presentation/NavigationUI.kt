@@ -114,7 +114,7 @@ fun NavigationBottomPanel(
     ) {
         Row(
             modifier = Modifier
-                .padding(20.dp)
+                .padding(16.dp)
                 .navigationBarsPadding() // Tránh thanh vuốt Home ảo
                 .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically, // Căn giữa theo chiều dọc
@@ -122,26 +122,26 @@ fun NavigationBottomPanel(
         ) {
             // Dùng weight(1f) để phần chữ chiếm hết khoảng trống còn dư
             Column(
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
             ) {
                 // 1. Thông tin Tuyến đường (Giờ & Mét)
-                Row(
-                    verticalAlignment = Alignment.Bottom
-                ) {
-                    Text(
-                        text = navState.timeRemaining.ifEmpty { "--" },
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF0F9D58) // Google Green
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "(${navState.distanceRemaining.ifEmpty { "--" }})",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                }
+                Text(
+                    text = navState.timeRemaining.ifEmpty { "--" },
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF0F9D58), // Google Green
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "(${navState.distanceRemaining.ifEmpty { "--" }})",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(horizontal = 2.dp),
+                    maxLines = 1,
+                )
 
                 Spacer(modifier = Modifier.height(4.dp))
 
@@ -186,13 +186,6 @@ fun NavigationBottomPanel(
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     // Dòng chính
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Close,
-                            contentDescription = null,
-                            tint = Color.White,
-                            modifier = Modifier.size(18.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Dừng chuyến đi",
                             style = MaterialTheme.typography.titleSmall, // Giảm size chữ chút cho gọn
