@@ -19,13 +19,20 @@ import com.example.sbikemap.presentation.UserProfileScreen
 import com.example.sbikemap.presentation.viewmodel.AuthViewModel
 import com.example.sbikemap.presentation.viewmodel.MapViewModel
 import com.example.sbikemap.presentation.viewmodel.ProfileViewModel
+import com.google.firebase.Firebase
+import com.google.firebase.auth.auth
 
 @Composable
 fun Navigate(
     container: AppContainer
 ){
     val navController = rememberNavController()
-    NavHost(navController, startDestination = "login") {
+    val startDest = if (Firebase.auth.currentUser != null) {
+        "map_route" // Đã đăng nhập -> Vào thẳng Map
+    } else {
+        "login"     // Chưa đăng nhập -> Vào màn Login
+    }
+    NavHost(navController, startDestination = startDest) {
         composable("login") {
             // AuthViewModel cần Repository và TokenManager
             val authViewModel: AuthViewModel = viewModel(
