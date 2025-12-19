@@ -1,3 +1,11 @@
+import java.util.Properties
+import java.io.FileInputStream
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -17,6 +25,7 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        buildConfigField("String", "OPENAI_API_KEY", "\"${localProperties["OPENAI_API_KEY"]}\"")
     }
 
     buildTypes {
@@ -36,6 +45,7 @@ android {
         jvmTarget = "11"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
         viewBinding = true
     }
@@ -88,7 +98,7 @@ dependencies {
     implementation("com.mapbox.search:offline-ndk27:2.17.1")
     implementation("com.mapbox.search:mapbox-search-android-ndk27:2.17.1")
     implementation("com.mapbox.search:mapbox-search-android-ui-ndk27:2.17.1")
-    implementation("com.google.ai.client.generativeai:generativeai:0.9.0")
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.mapbox.mapboxsdk:mapbox-sdk-turf:7.9.0")
 
 }

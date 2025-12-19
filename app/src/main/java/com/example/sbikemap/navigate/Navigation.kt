@@ -12,6 +12,7 @@ import com.example.sbikemap.presentation.HomeScreen
 import com.example.sbikemap.presentation.LocationPermissionWrapper
 import com.example.sbikemap.presentation.LoginScreen
 import com.example.sbikemap.presentation.MapScreen
+import com.example.sbikemap.presentation.PlanScreen
 import com.example.sbikemap.presentation.SignupScreen
 import com.example.sbikemap.presentation.UserProfileScreen
 import com.example.sbikemap.presentation.viewmodel.AuthViewModel
@@ -71,6 +72,18 @@ fun Navigate(
                 navController = navController,
                 // authViewModel có thể dùng lại cách khởi tạo mặc định nếu nó tự lấy dependencies
                 profileViewModel = profileViewModel
+            )
+        }
+        composable("plan_screen") {
+            // Lấy dữ liệu từ màn hình trước đó gửi sang
+            val result = navController.previousBackStackEntry
+                ?.savedStateHandle
+                ?.get<String>("ai_plan_result")
+                ?: "Không có dữ liệu hành trình."
+
+            PlanScreen(
+                navController = navController,
+                initialPlanContent = result
             )
         }
     }

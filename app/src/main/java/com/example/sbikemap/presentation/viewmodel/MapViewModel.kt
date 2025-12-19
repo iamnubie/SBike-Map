@@ -12,6 +12,7 @@ import com.example.sbikemap.data.remote.TripApi
 import com.example.sbikemap.data.remote.models.CreateTripRequest
 import com.example.sbikemap.presentation.MapStyleItem
 import com.example.sbikemap.presentation.RouteInfo
+import com.example.sbikemap.utils.AIJourneyPlanner
 import com.example.sbikemap.utils.HealthCalculator
 import com.example.sbikemap.utils.RouteWeatherPoint
 import com.example.sbikemap.utils.WeatherResponse
@@ -109,6 +110,50 @@ class MapViewModel(
                 e.printStackTrace()
                 Toast.makeText(context, "Lỗi kết nối khi lưu", Toast.LENGTH_SHORT).show()
             }
+        }
+    }
+
+    // --- LOGIC CACHE AI ---
+    private var lastPlannedOrigin: Point? = null
+    private var lastPlannedDestination: Point? = null
+    private var cachedPlanResult: String? = null
+
+    // Hàm gọi AI thông minh (tự check cache)
+    fun getOrFetchJourneyPlan(
+        originPoint: Point,
+        originName: String,
+        destPoint: Point,
+        destName: String,
+        distanceMeters: Double,
+        userWeight: Double,
+        onResult: (String) -> Unit
+    ) {
+        // 1. Kiểm tra xem có trùng với lần trước không
+        if (cachedPlanResult != null &&
+            originPoint == lastPlannedOrigin &&
+            destPoint == lastPlannedDestination) {
+            // Trả về cache ngay lập tức, không gọi API
+            onResult(cachedPlanResult!!)
+            return
+        }
+
+        // 2. Nếu khác, gọi API mới
+        viewModelScope.launch {
+            val result = AIJourneyPlanner.planJourney(
+                originName = originName,
+                destinationName = destName,
+                distanceMeters = distanceMeters,
+                userWeightKg = userWeight // Lấy từ Profile user
+            )
+
+            // 3. Lưu vào cache
+            if (!result.startsWith("Lỗi")) { // Chỉ cache nếu thành công
+                lastPlannedOrigin = originPoint
+                lastPlannedDestination = destPoint
+                cachedPlanResult = result
+            }
+
+            onResult(result)
         }
     }
 

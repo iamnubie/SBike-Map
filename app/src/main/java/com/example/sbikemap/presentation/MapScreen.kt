@@ -56,14 +56,18 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.DisposableEffect
@@ -75,6 +79,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavController
 import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
@@ -121,6 +126,7 @@ import com.example.sbikemap.utils.RouteWeatherLogic
 import com.example.sbikemap.utils.RouteWeatherPoint
 import com.example.sbikemap.presentation.components.WeatherRouteMarker
 import com.example.sbikemap.presentation.viewmodel.MapViewModel
+import com.example.sbikemap.utils.AIJourneyPlanner
 import com.example.sbikemap.utils.VoiceHelper
 import com.mapbox.core.constants.Constants.PRECISION_6
 import com.mapbox.navigation.base.route.NavigationRoute
@@ -840,22 +846,6 @@ fun MapScreen(
                 },
             )
 
-            // Nút BẮT ĐẦU (Chỉ hiện khi đã chọn đích)
-            if (mapViewModel.selectedDestination != null) {
-                ExtendedFloatingActionButton(
-                    onClick = { mapViewModel.isNavigating = true }, // Kích hoạt UI dẫn đường
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .padding(32.dp),
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White
-                ) {
-                    Icon(Icons.Default.PlayArrow, "Start")
-                    Spacer(Modifier.width(8.dp))
-                    Text("Bắt đầu")
-                }
-            }
-
             Column(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
@@ -922,6 +912,10 @@ fun MapScreen(
                     RoutePreviewBottomSheet(
                         routeInfo = mapViewModel.routeInfo!!,
                         weather = mapViewModel.weatherAtDestination,
+                        originName = mapViewModel.originName,
+                        destinationName = mapViewModel.destinationName,
+                        navController = navController,
+                        mapViewModel = mapViewModel,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
                 }
@@ -1026,19 +1020,28 @@ fun getManeuverTranslation(modifier: String?, type: String?): String {
 fun RoutePreviewBottomSheet(
     routeInfo: RouteInfo,
     weather: WeatherResponse?,
+    originName: String,
+    destinationName: String,
+    navController: NavController,
+    mapViewModel: MapViewModel,
     onStartNavigation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    // State quản lý trạng thái loading
+    var isLoadingAI by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(16.dp, RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)),
+            .shadow(16.dp, RoundedCornerShape(topStart = 18.dp, topEnd = 24.dp)),
         color = Color.White,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
         Column(
             modifier = Modifier
-                .padding(24.dp)
+                .padding(18.dp)
                 .navigationBarsPadding() // Tránh bị che bởi thanh điều hướng Android
         ) {
             // --- HEADER: Thanh nắm kéo nhỏ (Visual cue) ---
@@ -1092,9 +1095,69 @@ fun RoutePreviewBottomSheet(
                     }
                 }
 
-                // CỘT PHẢI: Widget Thời tiết (Nếu có)
-                if (weather != null) {
-                    WeatherWidget(weather = weather)
+                // CỘT PHẢI: Weather + Nút AI
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    modifier = Modifier.width(IntrinsicSize.Max)
+                ) {
+                    if (weather != null) {
+                        WeatherWidget(weather = weather)
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+
+                    // [NÚT LẬP LỊCH TRÌNH]
+                    Button(
+                        onClick = {
+                            if (isLoadingAI) return@Button
+                            isLoadingAI = true
+
+                            // 1. Lấy tọa độ để check cache
+                            val startPoint = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
+                            val endPoint = mapViewModel.selectedDestination
+
+                            if (startPoint != null && endPoint != null) {
+                                // 2. Gọi hàm thông minh của ViewModel
+                                mapViewModel.getOrFetchJourneyPlan(
+                                    originPoint = startPoint,
+                                    originName = originName,
+                                    destPoint = endPoint,
+                                    destName = destinationName,
+                                    distanceMeters = routeInfo.distanceMeters,
+                                    userWeight = 70.0 // TODO: Lấy từ Profile user thật
+                                ) { result ->
+                                    isLoadingAI = false
+
+                                    // 3. Chuyển trang
+                                    if (routeInfo.distanceMeters < 10000) {
+                                        val thongBao = "Quãng đường dưới 10km quá ngắn để lập lịch!"
+                                        Toast.makeText(context, thongBao, Toast.LENGTH_LONG).show()
+                                    } else {
+                                        navController.currentBackStackEntry?.savedStateHandle?.set("ai_plan_result", result)
+                                        navController.navigate("plan_screen")
+                                    }
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                        ),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
+                        enabled = !isLoadingAI,
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        if (isLoadingAI) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(16.dp),
+                                strokeWidth = 2.dp,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        } else {
+                            Icon(Icons.Default.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Lập lịch AI", color = MaterialTheme.colorScheme.onTertiaryContainer, style = MaterialTheme.typography.labelLarge)
+                        }
+                    }
                 }
             }
         }
@@ -1142,7 +1205,7 @@ fun WeatherWidget(weather: WeatherResponse) {
             Text(
                 text = weather.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() } ?: "",
                 style = MaterialTheme.typography.bodySmall,
-                color = Color.DarkGray // <--- Màu thủ phạm gây ám màu
+                color = Color.DarkGray
             )
         }
 
@@ -1162,7 +1225,6 @@ fun WeatherWidget(weather: WeatherResponse) {
         ) {
             val state = painter.state
             if (state is coil.compose.AsyncImagePainter.State.Loading || state is coil.compose.AsyncImagePainter.State.Error) {
-                // Đang tải hoặc lỗi -> Hiện icon dấu hỏi chấm (để debug)
                 Icon(
                     imageVector = Icons.Default.Warning, // Icon cảnh báo nếu lỗi
                     contentDescription = null,
