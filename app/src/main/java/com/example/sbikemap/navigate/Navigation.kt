@@ -8,6 +8,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.sbikemap.data.remote.AppContainer
+import com.example.sbikemap.presentation.HistoryScreen
 import com.example.sbikemap.presentation.HomeScreen
 import com.example.sbikemap.presentation.LocationPermissionWrapper
 import com.example.sbikemap.presentation.LoginScreen
@@ -71,6 +72,23 @@ fun Navigate(
             UserProfileScreen(
                 navController = navController,
                 // authViewModel có thể dùng lại cách khởi tạo mặc định nếu nó tự lấy dependencies
+                profileViewModel = profileViewModel
+            )
+        }
+        composable("history_screen") {
+            val profileViewModel: ProfileViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                        return ProfileViewModel(
+                            authApi = container.authApi,
+                            tripApi = container.tripApi
+                        ) as T
+                    }
+                }
+            )
+
+            HistoryScreen(
+                navController = navController,
                 profileViewModel = profileViewModel
             )
         }

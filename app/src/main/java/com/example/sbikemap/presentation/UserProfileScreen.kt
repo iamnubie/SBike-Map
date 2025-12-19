@@ -65,6 +65,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
@@ -186,7 +187,14 @@ fun UserProfileScreen(
 
             // PHẦN 3: CÁC TÙY CHỌN (Offline Map)
             item {
-                ProfileOptionItem(Icons.Default.Settings, "Cài đặt chung", "Ngôn ngữ, Giao diện") {}
+//                ProfileOptionItem(Icons.Default.Settings, "Cài đặt chung", "Ngôn ngữ, Giao diện") {}
+
+                ProfileOptionItem(
+                    icon = Icons.Default.DateRange,
+                    title = "Lịch sử chuyến đi",
+                    subtitle = "Xem lại các hành trình đã qua",
+                    onClick = { navController.navigate("history_screen") } // Navigate sang màn mới
+                )
 
                 ProfileOptionItem(
                     icon = Icons.Default.ExitToApp,
@@ -202,39 +210,12 @@ fun UserProfileScreen(
                     iconTint = Color.Red
                 ) { OfflineUtils.removeOfflineRegion(context) }
 
-                Spacer(modifier = Modifier.height(24.dp))
+                Spacer(modifier = Modifier.height(8.dp))
                 HorizontalDivider()
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // PHẦN 4: LỊCH SỬ CHUYẾN ĐI
-            item {
-                Text(
-                    text = "Lịch sử chuyến đi",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)
-                )
-            }
-
-            // Render danh sách chuyến đi từ ProfileViewModel
-            if (profileViewModel.tripHistory.isEmpty()) {
-                item {
-                    Text(
-                        text = "Chưa có chuyến đi nào.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.Gray,
-                        modifier = Modifier.padding(vertical = 16.dp)
-                    )
-                }
-            } else {
-                items(profileViewModel.tripHistory) { trip ->
-                    TripHistoryCard(trip)
-                    Spacer(modifier = Modifier.height(8.dp))
-                }
-            }
-
-            // PHẦN 5: ĐĂNG XUẤT (Cuối cùng)
+            // PHẦN 4: ĐĂNG XUẤT
             item {
                 Spacer(modifier = Modifier.height(32.dp))
                 Button(
@@ -499,63 +480,6 @@ fun ProfileOptionItem(
 }
 
 @Composable
-fun TripHistoryCard(trip: TripHistoryItem) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        colors = CardDefaults.cardColors(containerColor = Color.White)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Ngày giờ
-            Text(
-                text = formatDate(trip.startTime),
-                style = MaterialTheme.typography.labelSmall,
-                color = Color.Gray
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Từ -> Đến
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFF4CAF50), modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = trip.originName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            }
-            // Đường kẻ nối
-            Box(modifier = Modifier.padding(start = 7.dp).height(12.dp).width(2.dp).background(Color.LightGray))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color(0xFFF44336), modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(text = trip.destinationName, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 1)
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-            HorizontalDivider(thickness = 0.5.dp, color = Color.LightGray)
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Thông số
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                TripStat("Quãng đường", "${String.format("%.1f", trip.distanceMeters / 1000)} km")
-                TripStat("Thời gian", formatDurationHistory(trip.durationSeconds))
-                val caloText = if (trip.caloriesBurned > 0) {
-                    "${trip.caloriesBurned.toInt()} kcal"
-                } else {
-                    "Chưa có TT" // Hoặc "N/A", "--"
-                }
-                TripStat("Calo", caloText)
-            }
-        }
-    }
-}
-
-@Composable
-fun TripStat(label: String, value: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-        Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
-    }
-}
-
-@Composable
 fun WeightInputCard(
     weightInput: String,
     onWeightChange: (String) -> Unit,
@@ -672,24 +596,4 @@ fun WeightInputCard(
             }
         }
     }
-}
-
-// Hàm format ngày giờ
-fun formatDate(isoString: String): String {
-    return try {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val parsed = ZonedDateTime.parse(isoString)
-            parsed.format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"))
-        } else {
-            isoString.take(10) // Fallback cho Android cũ
-        }
-    } catch (e: Exception) {
-        isoString
-    }
-}
-
-// Hàm format thời gian (riêng cho History)
-fun formatDurationHistory(seconds: Double): String {
-    val minutes = (seconds / 60).toInt()
-    return if (minutes < 60) "$minutes phút" else "${minutes/60}h ${minutes%60}p"
 }

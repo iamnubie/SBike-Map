@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -64,13 +65,20 @@ fun LoginScreen(
     // State quản lý việc ẩn/hiện mật khẩu
     var isPasswordVisible by remember { mutableStateOf(false) }
 
+    //  Thêm biến state để quản lý loading cục bộ (xử lý Firebase)
+    var isLocalLoading by remember { mutableStateOf(false) }
+
     val context = LocalContext.current
     val focusManager = LocalFocusManager.current // Quản lý focus để chuyển ô nhập
     val authState by viewModel.authState.collectAsState()
 
+    // Tính toán xem có đang loading không (bao gồm cả Firebase và Backend)
+    val isLoading = isLocalLoading || authState is AuthViewModel.AuthState.Loading
+
     // 1. Tách logic đăng nhập ra hàm riêng để tái sử dụng (cho nút Bấm và nút Enter bàn phím)
     val onLoginRequest = {
         if (email.isNotBlank() && password.isNotBlank()) {
+            isLocalLoading = true
             // Ẩn bàn phím khi bắt đầu login
             focusManager.clearFocus()
 
@@ -81,9 +89,11 @@ fun LoginScreen(
                             val idToken = result.token
                             viewModel.handleFirebaseLogin(idToken ?: "")
                         }?.addOnFailureListener {
+                            isLocalLoading = false
                             Toast.makeText(context, "Lỗi lấy Firebase Token", Toast.LENGTH_SHORT).show()
                         }
                     } else {
+                        isLocalLoading = false
                         Toast.makeText(context, task.exception?.message ?: "Đăng nhập thất bại", Toast.LENGTH_SHORT).show()
                     }
                 }
@@ -103,6 +113,7 @@ fun LoginScreen(
                 }
             }
             is AuthViewModel.AuthState.Error -> {
+                isLocalLoading = false
                 val message = (authState as AuthViewModel.AuthState.Error).message
                 Toast.makeText(context, "Lỗi Backend: $message", Toast.LENGTH_LONG).show()
                 viewModel.resetState()
@@ -193,7 +204,12 @@ fun LoginScreen(
 
         Button(
             onClick = { onLoginRequest() },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth().height(50.dp),
+            enabled = !isLoading,
+            colors = ButtonDefaults.buttonColors(
+                disabledContainerColor = Color.Gray, // Màu nền khi bị khóa (tùy chọn)
+                disabledContentColor = Color.White
+            )
         ) {
             Text("Đăng nhập")
         }
