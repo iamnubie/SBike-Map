@@ -1,5 +1,6 @@
 package com.example.sbikemap.presentation
 
+import android.content.pm.ActivityInfo
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -45,6 +46,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.example.sbikemap.R
 import com.example.sbikemap.presentation.viewmodel.AuthViewModel
+import com.example.sbikemap.utils.LockScreenOrientation
 import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import kotlinx.coroutines.launch
@@ -55,6 +57,7 @@ fun SignupScreen(
     navController: NavHostController,
     viewModel: AuthViewModel = viewModel()
 ) {
+    LockScreenOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
