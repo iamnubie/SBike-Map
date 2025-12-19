@@ -36,6 +36,8 @@ fun requestCyclingRoute(
         RouteOptions.builder()
             .applyDefaultNavigationOptions()
             .profile(DirectionsCriteria.PROFILE_CYCLING) // Chế độ xe đạp
+            .language("vi")
+            .voiceUnits(DirectionsCriteria.METRIC)
             .enableRefresh(false) // Tắt refresh để tránh lỗi xe đạp
             .alternatives(true)
             .layersList(emptyList()) // Tắt layer ô tô

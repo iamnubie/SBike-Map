@@ -1,169 +1,5 @@
 package com.example.sbikemap.presentation
 
-/*import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import com.mapbox.common.MapboxOptions // Import quan trọng
-import com.mapbox.geojson.Point
-import com.mapbox.search.autocomplete.PlaceAutocomplete
-import com.mapbox.search.autocomplete.PlaceAutocompleteSuggestion
-import kotlinx.coroutines.launch // Import cho Coroutine
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun SearchBarWithAutocomplete(
-    onLocationSelected: (Point, String) -> Unit
-) {
-    var query by remember { mutableStateOf("") }
-    var active by remember { mutableStateOf(false) }
-    var suggestions by remember { mutableStateOf<List<PlaceAutocompleteSuggestion>>(emptyList()) }
-
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope() // 1. Tạo Scope để chạy hàm suspend
-
-    // 2. Khởi tạo theo tài liệu mới: Set token vào MapboxOptions
-    // Lưu ý: Tốt nhất nên set token ở MainActivity, nhưng đặt tạm ở đây để fix lỗi
-    SideEffect {
-        MapboxOptions.accessToken = context.getString(com.example.sbikemap.R.string.mapbox_access_token)
-    }
-
-    // Khởi tạo PlaceAutocomplete (không truyền token vào constructor nữa)
-    val placeAutocomplete = remember { PlaceAutocomplete.create() }
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 48.dp, start = 16.dp, end = 16.dp)
-    ) {
-        Surface(
-            modifier = Modifier
-                .fillMaxWidth()
-                .shadow(8.dp, RoundedCornerShape(24.dp)),
-            shape = RoundedCornerShape(24.dp),
-            color = Color.White
-        ) {
-            TextField(
-                value = query,
-                onValueChange = { newText ->
-                    query = newText
-                    active = true
-                    if (newText.isNotEmpty()) {
-                        // 3. Gọi hàm suggestions trong Coroutine Scope
-                        scope.launch {
-                            val response = placeAutocomplete.suggestions(newText)
-                            response.onValue { results ->
-                                suggestions = results
-                            }.onError { e ->
-                                suggestions = emptyList()
-                            }
-                        }
-                    } else {
-                        suggestions = emptyList()
-                    }
-                },
-                placeholder = { Text("Tìm địa điểm...") },
-                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null, tint = Color.Gray) },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = {
-                            query = ""
-                            suggestions = emptyList()
-                            active = false
-                        }) {
-                            Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
-                        }
-                    }
-                },
-                colors = TextFieldDefaults.colors(
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedIndicatorColor = Color.Transparent,
-                    unfocusedIndicatorColor = Color.Transparent
-                ),
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
-        if (active && suggestions.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(8.dp))
-            Surface(
-                modifier = Modifier.fillMaxWidth()
-                    .shadow(4.dp, RoundedCornerShape(8.dp)),
-                shape = RoundedCornerShape(8.dp),
-                color = Color.White
-            ) {
-                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
-                    items(suggestions) { suggestion ->
-                        SuggestionItem(suggestion) {
-                            query = suggestion.name
-                            active = false
-                            suggestions = emptyList()
-
-                            // 4. Gọi hàm select trong Coroutine Scope
-                            scope.launch {
-                                // Gọi select() trả về response
-                                val response = placeAutocomplete.select(suggestion)
-
-                                // Xử lý kết quả trả về
-                                response.onValue { result ->
-                                    val point = result.coordinate
-                                    onLocationSelected(point, suggestion.name)
-                                }.onError { e ->
-                                    // Xử lý lỗi nếu cần
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SuggestionItem(
-    suggestion: PlaceAutocompleteSuggestion,
-    onClick: () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null // Tạm tắt hiệu ứng gợn sóng để tránh crash do lệch version
-            ) { onClick() }
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Icon(Icons.Default.LocationOn, contentDescription = null, tint = Color.Gray)
-        Spacer(modifier = Modifier.width(16.dp))
-        Column {
-            Text(text = suggestion.name, style = MaterialTheme.typography.bodyLarge)
-            // 5. Sửa 'address' thành 'formattedAddress' (thuộc tính đúng của Suggestion)
-            suggestion.formattedAddress?.let {
-                Text(text = it, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
-            }
-        }
-    }
-}*/
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -184,8 +20,10 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.mapbox.common.MapboxOptions
 import com.mapbox.geojson.Point
 import com.mapbox.search.autocomplete.PlaceAutocomplete
@@ -293,6 +131,8 @@ fun RouteSearchBox(
                                 performSearch(it) // Search khi gõ
                             },
                             placeholder = { Text("Chọn điểm đi") },
+                            singleLine = true,
+                            textStyle = TextStyle(fontSize = 15.sp, color = Color.Black),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
@@ -317,7 +157,9 @@ fun RouteSearchBox(
                                         originQuery = ""
                                         suggestions = emptyList()
                                         onOriginSelected(null, "Vị trí của bạn")
-                                    }) {
+                                    },
+                                        modifier = Modifier.size(24.dp)
+                                        ) {
                                         Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
                                     }
                                 }
@@ -343,6 +185,8 @@ fun RouteSearchBox(
                                 performSearch(it)
                             },
                             placeholder = { Text("Chọn điểm đến") },
+                            singleLine = true,
+                            textStyle = TextStyle(fontSize = 15.sp, color = Color.Black),
                             colors = TextFieldDefaults.colors(
                                 focusedContainerColor = Color.Transparent,
                                 unfocusedContainerColor = Color.Transparent,
@@ -365,7 +209,9 @@ fun RouteSearchBox(
                                         destQuery = ""
                                         suggestions = emptyList()
                                         onDestinationSelected(null, "")
-                                    }) {
+                                    },
+                                        modifier = Modifier.size(24.dp)
+                                        ) {
                                         Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
                                     }
                                 }

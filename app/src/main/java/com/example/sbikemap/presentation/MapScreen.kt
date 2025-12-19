@@ -121,11 +121,13 @@ import com.example.sbikemap.utils.RouteWeatherLogic
 import com.example.sbikemap.utils.RouteWeatherPoint
 import com.example.sbikemap.presentation.components.WeatherRouteMarker
 import com.example.sbikemap.presentation.viewmodel.MapViewModel
+import com.example.sbikemap.utils.VoiceHelper
 import com.mapbox.core.constants.Constants.PRECISION_6
 import com.mapbox.navigation.base.route.NavigationRoute
 import com.mapbox.navigation.base.trip.model.RouteLegProgress
 import com.mapbox.navigation.base.trip.model.RouteProgress
 import com.mapbox.navigation.core.arrival.ArrivalObserver
+import com.mapbox.navigation.core.trip.session.VoiceInstructionsObserver
 import com.mapbox.turf.TurfConstants
 import com.mapbox.turf.TurfMeasurement
 import com.mapbox.turf.TurfMisc
@@ -410,9 +412,10 @@ fun MapScreen(
         onDispose { MapboxNavigationProvider.destroy() }
     }
 
-    // LOGIC LẮNG NGHE TIẾN TRÌNH DẪN ĐƯỜNG
+    // LOGIC LẮNG NGHE TIẾN TRÌNH DẪN ĐƯỜNG & GIỌNG NÓI
     DisposableEffect(mapViewModel.isNavigating) {
         if (mapViewModel.isNavigating) {
+            val voiceHelper = VoiceHelper(context)
             val progressObserver = RouteProgressObserver { routeProgress ->
                 // Lấy Expected (chứa List<Maneuver> hoặc Lỗi)
                 val maneuversExpected = maneuverApi.getManeuvers(routeProgress)
@@ -447,35 +450,45 @@ fun MapScreen(
                     distanceRemaining = distanceStr.toString()
                 )
             }
+            //Observer: Lấy câu nhắc giọng nói từ Mapbox
+            val voiceObserver = VoiceInstructionsObserver { voiceInstructions ->
+                // voiceInstructions.announcement chứa câu nói chuẩn (VD: "Turn right in 200 meters")
+                // Mapbox tự tính toán thời điểm nói hợp lý nhất
+                val textToSpeak = voiceInstructions.announcement() ?: ""
+                // Chỉ đọc nếu có nội dung
+                if (textToSpeak.isNotEmpty()) {
+                    voiceHelper.speak(textToSpeak)
+                }
+            }
             // 2. Observer đến nơi (Arrival)
             val arrivalObserver = object : ArrivalObserver {
 
                 // Hàm này BẮT BUỘC phải có (dù không dùng cũng phải để trống)
                 // Chạy khi đến các điểm dừng trung gian (waypoints)
-                override fun onWaypointArrival(routeProgress: RouteProgress) {
-                    // Nếu bạn không có điểm dừng giữa đường thì để trống
-                }
+                override fun onWaypointArrival(routeProgress: RouteProgress) {}
 
                 // Hàm này chạy khi ĐẾN ĐÍCH CUỐI CÙNG
                 override fun onFinalDestinationArrival(routeProgress: RouteProgress) {
+                    voiceHelper.speak("Bạn đã đến nơi. Chuyến đi kết thúc.")
                     onFinishTrip()
                     Toast.makeText(context, "Đã đến nơi! Chuyến đi đã được lưu.", Toast.LENGTH_LONG).show()
                 }
 
                 // Hàm này chạy khi bắt đầu chặng tiếp theo
-                override fun onNextRouteLegStart(routeLegProgress: RouteLegProgress) {
-                    // Không cần xử lý gì đặc biệt
-                }
+                override fun onNextRouteLegStart(routeLegProgress: RouteLegProgress) {}
             }
 
             mapboxNavigation.registerRouteProgressObserver(progressObserver)
+            mapboxNavigation.registerVoiceInstructionsObserver(voiceObserver)
             mapboxNavigation.registerArrivalObserver(arrivalObserver)
             mapboxNavigation.startTripSession()
 
             onDispose {
                 mapboxNavigation.unregisterRouteProgressObserver(progressObserver)
+                mapboxNavigation.unregisterVoiceInstructionsObserver(voiceObserver)
                 mapboxNavigation.unregisterArrivalObserver(arrivalObserver)
                 mapboxNavigation.stopTripSession()
+                voiceHelper.shutdown()
             }
         } else {
             onDispose { }
