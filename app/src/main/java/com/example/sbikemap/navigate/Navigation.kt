@@ -38,12 +38,13 @@ fun Navigate(
         composable("signup") { SignupScreen(navController)}
         composable("home") { HomeScreen(navController)}
         composable("map_route") {
-            // [CẬP NHẬT] MapViewModel cần TripApi
+            // MapViewModel cần TripApi
             val mapViewModel: MapViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     override fun <T : ViewModel> create(modelClass: Class<T>): T {
                         return MapViewModel(
-                            tripApi = container.tripApi // Truyền TripApi vào đây
+                            tripApi = container.tripApi, // Truyền TripApi vào đây
+                            authApi = container.authApi
                         ) as T
                     }
                 }

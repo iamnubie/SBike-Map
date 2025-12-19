@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.sbikemap.data.remote.AuthApi
 import com.example.sbikemap.data.remote.TripApi
 import com.example.sbikemap.data.remote.models.CreateTripRequest
 import com.example.sbikemap.presentation.MapStyleItem
@@ -23,7 +24,8 @@ import java.time.Instant
 
 // ViewModel chịu trách nhiệm lưu giữ trạng thái của bản đồ
 class MapViewModel(
-    private val tripApi: TripApi
+    private val tripApi: TripApi,
+    private val authApi: AuthApi
 ) : ViewModel() {
 
     // 1. Điểm đi, điểm đến, vị trí User
@@ -50,40 +52,62 @@ class MapViewModel(
     // 5. Trạng thái tìm kiếm UI
     var isSearching by mutableStateOf(false)
     var currentRoutes by mutableStateOf<List<NavigationRoute>>(emptyList())
+    var isFirstLocate by mutableStateOf(true)
 
     // Hàm lưu chuyến đi (Gọi khi kết thúc dẫn đường)
     fun saveTripToHistory(
         context: Context,
         durationSeconds: Double,
-        distanceMeters: Double,
-        userWeightKg: Double = 70.0 // Mặc định hoặc lấy từ Profile
+        distanceMeters: Double
+        // Bỏ tham số userWeightKg đi vì ta tự fetch bên trong
     ) {
         viewModelScope.launch {
             try {
-                // 1. Tính Calo
+                var currentWeight = 0.0 // [SỬA]: Mặc định là 0.0
+
+                try {
+                    val profileResponse = authApi.getUserProfile()
+                    if (profileResponse.isSuccessful && profileResponse.body() != null) {
+                        // Nếu user có weight thì lấy, nếu null thì về 0.0
+                        currentWeight = profileResponse.body()!!.weight ?: 0.0
+                    }
+                } catch (e: Exception) {
+                    // Lỗi mạng -> Giữ nguyên 0.0
+                    e.printStackTrace()
+                }
+
                 val durationMinutes = durationSeconds / 60.0
                 val distanceKm = distanceMeters / 1000.0
                 val speedKmh = if (durationMinutes > 0) distanceKm / (durationMinutes / 60.0) else 0.0
-                val calories = HealthCalculator.calculateCalories(userWeightKg, durationMinutes, speedKmh)
 
-                // 2. Tạo Request
+                // Chỉ tính toán nếu cân nặng > 0, ngược lại Calo = 0
+                val calories = if (currentWeight > 0) {
+                    HealthCalculator.calculateCalories(currentWeight, durationMinutes, speedKmh)
+                } else {
+                    0.0
+                }
+
                 val request = CreateTripRequest(
                     originName = originName,
                     destinationName = destinationName.ifEmpty { "Điểm đến đã chọn" },
                     startTime = Instant.now().toString(),
                     durationSeconds = durationSeconds,
                     distanceMeters = distanceMeters,
-                    userWeightSnapshot = userWeightKg,
-                    caloriesBurned = calories
+                    userWeightSnapshot = currentWeight, // Lưu 0.0 vào lịch sử để biết lúc này chưa có cân nặng
+                    caloriesBurned = calories // Lưu 0.0
                 )
 
-                // 3. Gọi API
                 val response = tripApi.saveTrip(request)
                 if (response.isSuccessful) {
-                    Toast.makeText(context, "Đã lưu chuyến đi!", Toast.LENGTH_SHORT).show()
+                    // Thông báo khác đi một chút tùy vào có calo hay không
+                    val msg = if (calories > 0) "Đã lưu! (${calories.toInt()} kcal)" else "Đã lưu chuyến đi!"
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "Lỗi lưu: ${response.code()}", Toast.LENGTH_SHORT).show()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+                Toast.makeText(context, "Lỗi kết nối khi lưu", Toast.LENGTH_SHORT).show()
             }
         }
     }

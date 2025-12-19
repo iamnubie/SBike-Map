@@ -45,6 +45,21 @@ class ProfileViewModel(
         }
     }
 
+    fun fetchUserProfile() {
+        viewModelScope.launch {
+            try {
+                val response = authApi.getUserProfile()
+                if (response.isSuccessful && response.body() != null) {
+                    val user = response.body()!!
+                    // Cập nhật State cân nặng -> UI sẽ tự nhảy số
+                    userWeight = user.weight ?: 0.0
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
+
     // Hàm lấy lịch sử chuyến đi
     fun fetchTripHistory() {
         viewModelScope.launch {

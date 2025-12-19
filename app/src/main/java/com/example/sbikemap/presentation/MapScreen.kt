@@ -1,5 +1,6 @@
 package com.example.sbikemap.presentation
 
+import MapLocationHandler
 import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
@@ -157,7 +158,7 @@ fun MapScreen(
     // State Variables
     var puckBearingSource by remember { mutableStateOf(PuckBearing.HEADING) }
     var showStyleSheet by remember { mutableStateOf(false) }
-    var isFirstLocate by remember { mutableStateOf(true) }
+//    var isFirstLocate by remember { mutableStateOf(true) }
     // Logic tính toán điểm bắt đầu thực tế
     val actualStartPoint = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
 
@@ -230,8 +231,7 @@ fun MapScreen(
             mapViewModel.saveTripToHistory(
                 context = context,
                 durationSeconds = currentRoute.durationSeconds,
-                distanceMeters = currentRoute.distanceMeters,
-                userWeightKg = 65.0
+                distanceMeters = currentRoute.distanceMeters
             )
         }
 
@@ -680,40 +680,11 @@ fun MapScreen(
                 }
 
                 // Camera & Location Logic
-                MapEffect(puckBearingSource) { mapView ->
-                    mapView.location.updateSettings {
-                        enabled = true
-                        locationPuck = createDefault2DPuck(withBearing = true)
-                        pulsingEnabled = true
-                        puckBearing = puckBearingSource
-                        puckBearingEnabled = true
-                    }
-                    if (isFirstLocate) {
-                        val listener = object : OnIndicatorPositionChangedListener {
-                            override fun onIndicatorPositionChanged(point: Point) {
-                                mapView.location.removeOnIndicatorPositionChangedListener(this)
-                                mapViewModel.userLocationPoint = point
-                                mapView.mapboxMap.setCamera(CameraOptions.Builder().center(point).zoom(10.0).build())
-                                mapViewportState.transitionToFollowPuckState(
-                                    FollowPuckViewportStateOptions.Builder()
-                                        .bearing(FollowPuckViewportStateBearing.SyncWithLocationPuck)
-                                        .zoom(16.0)
-                                        .build()
-                                )
-                                isFirstLocate = false
-                            }
-                        }
-                        mapView.location.addOnIndicatorPositionChangedListener(listener)
-                    } else {
-                        // Buộc Camera bám theo User + Cập nhật chế độ quay (Heading/Course)
-                        mapViewportState.transitionToFollowPuckState(
-                            FollowPuckViewportStateOptions.Builder()
-                                .bearing(FollowPuckViewportStateBearing.SyncWithLocationPuck)
-                                .zoom(16.0) // Giữ mức zoom cận cảnh
-                                .build()
-                        )
-                    }
-                }
+                MapLocationHandler(
+                    mapViewModel = mapViewModel,
+                    mapViewportState = mapViewportState,
+                    puckBearingSource = puckBearingSource
+                )
 
                 // Camera logic riêng khi đang dẫn đường (Zoom sát hơn, nghiêng map)
                 MapEffect(mapViewModel.isNavigating) {

@@ -62,6 +62,18 @@ import com.example.sbikemap.presentation.viewmodel.ProfileViewModel
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.sp
+import com.example.sbikemap.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,13 +101,18 @@ fun UserProfileScreen(
     // 1. Load lịch sử & cân nặng khi mở màn hình
     LaunchedEffect(Unit) {
         profileViewModel.fetchTripHistory()
-        // Nếu bạn có API lấy profile, gọi ở đây để lấy cân nặng hiện tại
+        profileViewModel.fetchUserProfile()
     }
 
     // 2. Cập nhật ô nhập khi có dữ liệu cân nặng từ ViewModel
     LaunchedEffect(profileViewModel.userWeight) {
         if (profileViewModel.userWeight > 0) {
-            weightInput = profileViewModel.userWeight.toString()
+            val weightText = profileViewModel.userWeight.toString()
+            weightInput = if (weightText.endsWith(".0")) {
+                weightText.substringBefore(".0")
+            } else {
+                weightText
+            }
         }
     }
 
@@ -113,12 +130,6 @@ fun UserProfileScreen(
             MapboxNavigationProvider.create(navOptions)
         }
     }
-
-//    DisposableEffect(Unit) {
-//        onDispose {
-//            MapboxNavigationProvider.destroy()
-//        }
-//    }
 
     Scaffold(
         topBar = {
@@ -139,7 +150,7 @@ fun UserProfileScreen(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // --- PHẦN 1: THÔNG TIN USER (AVATAR, TÊN) ---
+            // THÔNG TIN USER (AVATAR, TÊN)
             item {
                 UserInfoSection(
                     name = currentDisplayName,
@@ -157,51 +168,23 @@ fun UserProfileScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            // --- PHẦN 2: CẬP NHẬT THỂ TRẠNG (CÂN NẶNG) ---
+            // CẬP NHẬT THỂ TRẠNG (CÂN NẶNG)
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8))
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Text(
-                            text = "Thể trạng (Dùng để tính Calo)",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            OutlinedTextField(
-                                value = weightInput,
-                                onValueChange = { if (it.all { char -> char.isDigit() || char == '.' }) weightInput = it },
-                                label = { Text("Cân nặng (kg)") },
-                                placeholder = { Text("VD: 65") },
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                modifier = Modifier.weight(1f),
-                                trailingIcon = { Text("kg", modifier = Modifier.padding(end = 8.dp)) }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Button(
-                                onClick = {
-                                    val w = weightInput.toDoubleOrNull()
-                                    if (w != null && w > 0) {
-                                        // Gọi hàm update trong ProfileViewModel
-                                        profileViewModel.saveUserWeight(w, context)
-                                    }
-                                },
-                                enabled = weightInput.isNotEmpty()
-                            ) {
-                                Text("Lưu")
-                            }
-                        }
+                WeightInputCard(
+                    weightInput = weightInput,
+                    onWeightChange = { newValue -> weightInput = newValue },
+                    currentSavedWeight = profileViewModel.userWeight,
+                    onSave = { newWeight ->
+                        // Gọi ViewModel xử lý lưu
+                        profileViewModel.saveUserWeight(newWeight, context)
                     }
-                }
+                )
+
                 Spacer(modifier = Modifier.height(24.dp))
-                HorizontalDivider()
+                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
             }
 
-            // --- PHẦN 3: CÁC TÙY CHỌN (Offline Map...) ---
+            // PHẦN 3: CÁC TÙY CHỌN (Offline Map)
             item {
                 ProfileOptionItem(Icons.Default.Settings, "Cài đặt chung", "Ngôn ngữ, Giao diện") {}
 
@@ -224,7 +207,7 @@ fun UserProfileScreen(
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
-            // --- PHẦN 4: LỊCH SỬ CHUYẾN ĐI ---
+            // PHẦN 4: LỊCH SỬ CHUYẾN ĐI
             item {
                 Text(
                     text = "Lịch sử chuyến đi",
@@ -251,7 +234,7 @@ fun UserProfileScreen(
                 }
             }
 
-            // --- PHẦN 5: ĐĂNG XUẤT (Cuối cùng) ---
+            // PHẦN 5: ĐĂNG XUẤT (Cuối cùng)
             item {
                 Spacer(modifier = Modifier.height(32.dp))
                 Button(
@@ -553,7 +536,12 @@ fun TripHistoryCard(trip: TripHistoryItem) {
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 TripStat("Quãng đường", "${String.format("%.1f", trip.distanceMeters / 1000)} km")
                 TripStat("Thời gian", formatDurationHistory(trip.durationSeconds))
-                TripStat("Calo", "${trip.caloriesBurned.toInt()} kcal")
+                val caloText = if (trip.caloriesBurned > 0) {
+                    "${trip.caloriesBurned.toInt()} kcal"
+                } else {
+                    "Chưa có TT" // Hoặc "N/A", "--"
+                }
+                TripStat("Calo", caloText)
             }
         }
     }
@@ -564,6 +552,117 @@ fun TripStat(label: String, value: String) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(text = value, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         Text(text = label, style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+    }
+}
+
+@Composable
+fun WeightInputCard(
+    weightInput: String,
+    onWeightChange: (String) -> Unit,
+    currentSavedWeight: Double,
+    onSave: (Double) -> Unit
+) {
+    val value = weightInput.toDoubleOrNull()
+    val isValid = value != null && value > 0
+    val isChanged = isValid && value != currentSavedWeight
+
+    // 1. Lấy controller để quản lý bàn phím và focus
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val focusManager = LocalFocusManager.current
+
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFFF8F9FA)
+        ),
+        elevation = CardDefaults.cardElevation(0.dp)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+
+            // Title
+            Text(
+                text = "Cân nặng (Dùng để tính Calo)",
+                style = MaterialTheme.typography.bodySmall,
+                color = Color(0xFF6B7280)
+            )
+
+            // Input + Button
+            Row(
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+
+                // Input box
+                OutlinedTextField(
+                    value = weightInput,
+                    onValueChange = {
+                        if (it.length <= 5 &&
+                            it.count { c -> c == '.' } <= 1 &&
+                            it.all { c -> c.isDigit() || c == '.' }
+                        ) {
+                            onWeightChange(it)
+                        }
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(56.dp),
+                    placeholder = {
+                        Text(
+                            text = "Cân nặng (kg)",
+                            color = Color(0xFF9CA3AF),
+                            fontSize = 14.sp
+                        )
+                    },
+                    textStyle = TextStyle(
+                        fontSize = 16.sp,
+                        color = Color.Black
+                    ),
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        unfocusedBorderColor = Color(0xFFE5E7EB),
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        cursorColor = MaterialTheme.colorScheme.primary
+                    )
+                )
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Save button
+                Button(
+                    onClick = {
+                        value?.let {
+                            onSave(it)
+                            // 2. Thêm logic ẩn bàn phím và bỏ focus
+                            keyboardController?.hide() // Hạ bàn phím
+                            focusManager.clearFocus()  // Mất con trỏ nháy
+                        }
+                    },
+                    enabled = isChanged,
+                    modifier = Modifier.height(52.dp),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = ButtonDefaults.buttonElevation(0.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        disabledContainerColor = Color(0xFFE5E7EB),
+                        contentColor = Color.White,
+                        disabledContentColor = Color(0xFF9CA3AF)
+                    ),
+                    contentPadding = PaddingValues(0.dp)
+                ) {
+                    Text(
+                        text = "Lưu",
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
     }
 }
 

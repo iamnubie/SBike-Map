@@ -3,6 +3,7 @@ package com.example.sbikemap.data.remote
 import com.example.sbikemap.data.remote.models.AuthRequest
 import com.example.sbikemap.data.remote.models.AuthResponse
 import com.example.sbikemap.data.remote.models.UpdateUserRequest
+import com.example.sbikemap.data.remote.models.UserProfileResponse
 import okhttp3.MultipartBody
 import retrofit2.http.Body
 import retrofit2.http.Multipart
@@ -10,6 +11,7 @@ import retrofit2.http.PATCH
 import retrofit2.http.POST
 import retrofit2.http.Part
 import retrofit2.Response
+import retrofit2.http.GET
 
 interface AuthApi {
     @POST("/auth/firebase-login")
@@ -31,4 +33,8 @@ interface AuthApi {
     @POST("users/update-profile")
     @JvmSuppressWildcards // Bắt buộc khi dùng Map
     suspend fun updateUserPhysicalStats(@Body body: Map<String, Any>): Response<Any>
+
+    // Hàm lấy thông tin profile (chứa cân nặng)
+    @GET("users/profile")
+    suspend fun getUserProfile(): Response<UserProfileResponse>
 }
