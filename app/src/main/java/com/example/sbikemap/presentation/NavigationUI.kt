@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow.Companion.Ellipsis
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -89,60 +90,6 @@ fun TurnByTurnOverlay(
                 }
             }
         }
-
-        // --- PHẦN DƯỚI: THÔNG TIN CHUYẾN ĐI & NÚT HỦY (BOTTOM PANEL) ---
-        Card(
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .fillMaxWidth()
-                .padding(bottom = 16.dp),
-            colors = CardDefaults.cardColors(containerColor = Color.White),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
-        ) {
-            Row(
-                modifier = Modifier
-                    .padding(16.dp)
-                    .fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Column {
-                    // Thời gian dự kiến
-                    Text(
-                        text = navState.timeRemaining,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = Color(0xFF00C853), // Màu xanh lá
-                        fontWeight = FontWeight.Bold
-                    )
-                    // Khoảng cách còn lại
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = navState.distanceRemaining,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.Gray
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "•", color = Color.Gray)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(text = "Đến nơi", color = Color.Gray)
-                    }
-                }
-
-                // Nút Hủy dẫn đường (Dấu X đỏ)
-                IconButton(
-                    onClick = onCancelNavigation,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .background(Color(0xFFFFEBEE), shape = RoundedCornerShape(12.dp))
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Close,
-                        contentDescription = "Thoát",
-                        tint = Color.Red
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -165,94 +112,100 @@ fun NavigationBottomPanel(
         color = Color.White,
         shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp)
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .padding(20.dp)
                 .navigationBarsPadding() // Tránh thanh vuốt Home ảo
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically, // Căn giữa theo chiều dọc
+            horizontalArrangement = Arrangement.SpaceBetween // Đẩy 2 phần về 2 phía
         ) {
-            // 1. Thông tin Tuyến đường (Giờ & Mét)
-            Row(
-                verticalAlignment = Alignment.Bottom,
-                modifier = Modifier.fillMaxWidth()
+            // Dùng weight(1f) để phần chữ chiếm hết khoảng trống còn dư
+            Column(
+                modifier = Modifier.weight(1f)
             ) {
-                // Thời gian (To, Xanh lá)
-                Text(
-                    text = navState.timeRemaining.ifEmpty { "--" },
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF0F9D58) // Google Green
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                // Khoảng cách (Nhỏ hơn)
-                Text(
-                    text = "(${navState.distanceRemaining.ifEmpty { "--" }})",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = Color.Gray,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
+                // 1. Thông tin Tuyến đường (Giờ & Mét)
+                Row(
+                    verticalAlignment = Alignment.Bottom
+                ) {
+                    Text(
+                        text = navState.timeRemaining.ifEmpty { "--" },
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF0F9D58) // Google Green
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "(${navState.distanceRemaining.ifEmpty { "--" }})",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.Gray,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // 2. Địa điểm đến
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Place,
+                        contentDescription = null,
+                        tint = Color.Gray,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = destinationName.ifEmpty { "Điểm đến đã chọn" },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.DarkGray,
+                        maxLines = 1, // Giới hạn 1 dòng để không vỡ layout
+                        overflow = Ellipsis
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.width(12.dp))
 
-            // 2. Địa điểm đến
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Place,
-                    contentDescription = null,
-                    tint = Color.Gray,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = destinationName.ifEmpty { "Điểm đến đã chọn" },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.DarkGray,
-                    maxLines = 1
-                )
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // 3. NÚT ĐA NĂNG (HỦY / LƯU)
-            // Thay vì dùng Button thường, ta dùng Box + combinedClickable
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
                     .height(56.dp)
-                    .clip(RoundedCornerShape(12.dp)) // Bo góc
-                    .background(Color(0xFFD32F2F))   // Màu đỏ
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFFD32F2F)) // Màu đỏ cũ
                     .combinedClickable(
                         interactionSource = interactionSource,
                         indication = null,
-                        onClick = {
-                            // Xử lý Click ngắn -> HỦY
-                            onCancel()
-                        },
+                        onClick = { onCancel() },
                         onLongClick = {
-                            // Xử lý Nhấn giữ -> LƯU
-                            haptic.performHapticFeedback(HapticFeedbackType.LongPress) // Rung nhẹ báo hiệu
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                             onSave()
                         }
-                    ),
+                    )
+                    .padding(horizontal = 16.dp), // Padding để nút không quá sát chữ
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     // Dòng chính
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(Icons.Default.Close, contentDescription = null, tint = Color.White, modifier = Modifier.size(20.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
+                        Icon(
+                            Icons.Default.Close,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
                         Text(
                             text = "Dừng chuyến đi",
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall, // Giảm size chữ chút cho gọn
                             fontWeight = FontWeight.Bold,
                             color = Color.White
                         )
                     }
-                    // Dòng phụ hướng dẫn
+                    // Dòng phụ
                     Text(
-                        text = "(Nhấn giữ để Lưu lịch sử)",
+                        text = "(Giữ để Lưu)", // Rút gọn nhẹ text phụ cho đỡ vỡ layout
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.8f),
+                        fontSize = 10.sp
                     )
                 }
             }

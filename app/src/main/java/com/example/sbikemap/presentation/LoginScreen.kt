@@ -93,7 +93,7 @@ fun LoginScreen(
         when (authState) {
             is AuthViewModel.AuthState.Success -> {
                 val response = (authState as AuthViewModel.AuthState.Success).response
-                Toast.makeText(context, "Đăng nhập thành công! Hello ${response.email}", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, "Đăng nhập thành công! \nHello ${response.email}", Toast.LENGTH_SHORT).show()
                 viewModel.resetState()
                 navController.navigate("map_route") {
                     popUpTo("login") { inclusive = true }
@@ -105,7 +105,7 @@ fun LoginScreen(
                 viewModel.resetState()
             }
             is AuthViewModel.AuthState.Loading -> {
-                Toast.makeText(context, "Đang xác thực...", Toast.LENGTH_SHORT).show()
+//                Toast.makeText(context, "Đang xác thực...", Toast.LENGTH_SHORT).show()
             }
             else -> { /* Idle */ }
         }

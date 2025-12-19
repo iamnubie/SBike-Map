@@ -679,7 +679,7 @@ fun MapScreen(
                                 // Chọn điểm mới
                                 mapViewModel.selectedDestination = clickedPoint
                                 reverseGeocode(clickedPoint, isOrigin = false)
-                                Toast.makeText(context, "Đã chọn điểm trên bản đồ", Toast.LENGTH_SHORT).show()
+//                                Toast.makeText(context, "Đã chọn điểm trên bản đồ", Toast.LENGTH_SHORT).show()
 
                                 // Vẽ đường
                                 val start = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
@@ -757,6 +757,29 @@ fun MapScreen(
                             onFinishTrip() // Gọi hàm lưu chuyến đi đã viết sẵn
                         }
                     )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = 180.dp, end = 16.dp), // Canh vị trí nằm trên bảng điều khiển một chút
+                contentAlignment = Alignment.BottomEnd
+            ) {
+                FloatingActionButton(
+                    onClick = {
+                        // KÍCH HOẠT LẠI CHẾ ĐỘ TRACKING LIÊN TỤC
+                        mapViewportState.transitionToFollowPuckState(
+                            FollowPuckViewportStateOptions.Builder()
+                                .bearing(FollowPuckViewportStateBearing.SyncWithLocationPuck)
+                                .zoom(18.0)
+                                .pitch(50.0)
+                                .build()
+                        )
+                    },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Default.LocationOn, contentDescription = "Về giữa")
                 }
             }
         }
@@ -1074,8 +1097,6 @@ fun RoutePreviewBottomSheet(
                     WeatherWidget(weather = weather)
                 }
             }
-
-            Spacer(modifier = Modifier.height(32.dp))
         }
     }
 }
