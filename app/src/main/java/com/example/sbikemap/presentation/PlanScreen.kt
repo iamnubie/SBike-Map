@@ -15,6 +15,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
@@ -38,8 +39,12 @@ fun PlanScreen(
     var inputText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
-    // Tự động cuộn xuống cuối khi có tin nhắn mới
-    LaunchedEffect(messages.size) {
+    // Lắng nghe sự thay đổi của bàn phím để cuộn xuống
+    val imeInsets = WindowInsets.ime
+    val density = LocalDensity.current
+
+    // Tự động cuộn xuống cuối khi có tin nhắn mới HOẶC khi bàn phím hiện lên
+    LaunchedEffect(messages.size, imeInsets.getBottom(density)) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
@@ -47,18 +52,51 @@ fun PlanScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Trợ lý hành trình", style = MaterialTheme.typography.titleMedium) },
+            CenterAlignedTopAppBar(
+                title = {
+                    Text("Trợ lý hành trình",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Color.Black
+                    ) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.Default.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.Black
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White)
             )
         },
-        bottomBar = {
-            // Thanh nhập chat
+    ) { padding ->
+
+        // [QUAN TRỌNG]: Layout chính xử lý bàn phím
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding) // Padding của TopBar
+                .imePadding() // [QUAN TRỌNG]: Tự động đẩy layout lên khi bàn phím mở
+                .background(Color(0xFFF5F5F5))
+        ) {
+            // 1. Danh sách tin nhắn (Chiếm hết phần không gian còn lại)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f) // Chiếm toàn bộ chiều cao trừ thanh input
+                    .padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(messages) { msg ->
+                    if (msg.role != "system") {
+                        ChatBubble(message = msg)
+                    }
+                }
+            }
+
+            // 2. Thanh nhập chat (Luôn nằm đáy Column)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -72,7 +110,13 @@ fun PlanScreen(
                     placeholder = { Text("Hỏi thêm về calo, địa điểm...") },
                     modifier = Modifier.weight(1f),
                     shape = RoundedCornerShape(24.dp),
-                    maxLines = 3
+                    maxLines = 3,
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+                        unfocusedBorderColor = Color.LightGray,
+                        focusedTextColor = Color.Black,
+                        unfocusedTextColor = Color.Black
+                    )
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 IconButton(
@@ -81,30 +125,16 @@ fun PlanScreen(
                         inputText = ""
                     },
                     enabled = !isLoading && inputText.isNotBlank(),
-                    modifier = Modifier.background(MaterialTheme.colorScheme.primary, androidx.compose.foundation.shape.CircleShape)
+                    modifier = Modifier.background(
+                        color = if (!isLoading && inputText.isNotBlank()) MaterialTheme.colorScheme.primary else Color.Gray,
+                        shape = androidx.compose.foundation.shape.CircleShape
+                    )
                 ) {
                     if (isLoading) {
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), color = Color.White)
                     } else {
                         Icon(Icons.Default.Send, null, tint = Color.White)
                     }
-                }
-            }
-        }
-    ) { padding ->
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Color(0xFFF5F5F5))
-                .padding(padding)
-                .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(messages) { msg ->
-                if (msg.role != "system") { // Ẩn tin nhắn hệ thống
-                    ChatBubble(message = msg)
                 }
             }
         }

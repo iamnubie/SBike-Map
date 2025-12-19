@@ -562,9 +562,11 @@ fun WeightInputCard(
     currentSavedWeight: Double,
     onSave: (Double) -> Unit
 ) {
+    val context = LocalContext.current
     val value = weightInput.toDoubleOrNull()
     val isValid = value != null && value > 0
     val isChanged = isValid && value != currentSavedWeight
+    val isErrorTooHigh = value != null && value > 150
 
     // 1. Lấy controller để quản lý bàn phím và focus
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -616,6 +618,7 @@ fun WeightInputCard(
                             fontSize = 14.sp
                         )
                     },
+                    isError = isErrorTooHigh,
                     textStyle = TextStyle(
                         fontSize = 16.sp,
                         color = Color.Black
@@ -628,7 +631,9 @@ fun WeightInputCard(
                     colors = OutlinedTextFieldDefaults.colors(
                         unfocusedBorderColor = Color(0xFFE5E7EB),
                         focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        cursorColor = MaterialTheme.colorScheme.primary
+                        cursorColor = MaterialTheme.colorScheme.primary,
+                        errorBorderColor = Color.Red,
+                        errorCursorColor = Color.Red
                     )
                 )
 
@@ -637,11 +642,14 @@ fun WeightInputCard(
                 // Save button
                 Button(
                     onClick = {
-                        value?.let {
-                            onSave(it)
-                            // 2. Thêm logic ẩn bàn phím và bỏ focus
-                            keyboardController?.hide() // Hạ bàn phím
-                            focusManager.clearFocus()  // Mất con trỏ nháy
+                        if (value != null && value > 150) {
+                            Toast.makeText(context, "Cân nặng tối đa cho phép là 150kg!", Toast.LENGTH_SHORT).show()
+                        } else {
+                            value?.let {
+                                onSave(it)
+                                keyboardController?.hide()
+                                focusManager.clearFocus()
+                            }
                         }
                     },
                     enabled = isChanged,

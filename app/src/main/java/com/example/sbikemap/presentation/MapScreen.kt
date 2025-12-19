@@ -853,6 +853,11 @@ fun MapScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 horizontalAlignment = Alignment.End
             ) {
+
+                AIScheduleFloatingButton(
+                    mapViewModel = mapViewModel,
+                    navController = navController
+                )
                 // Nút Profile
                 FloatingActionButton(
                     onClick = { navController.navigate("profile") },
@@ -941,6 +946,70 @@ fun MapScreen(
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun AIScheduleFloatingButton(
+    mapViewModel: MapViewModel,
+    navController: NavController
+) {
+    val context = LocalContext.current
+    var isLoadingAI by remember { mutableStateOf(false) }
+
+    FloatingActionButton(
+        onClick = {
+            // 1. Kiểm tra xem đang bận tải không
+            if (isLoadingAI) return@FloatingActionButton
+
+            // 2. Kiểm tra xem đã chọn đường chưa
+            val routeInfo = mapViewModel.routeInfo
+            val startPoint = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
+            val endPoint = mapViewModel.selectedDestination
+
+            if (routeInfo == null || startPoint == null || endPoint == null) {
+                Toast.makeText(context, "Vui lòng chọn điểm đến trước để lập lịch!", Toast.LENGTH_SHORT).show()
+                return@FloatingActionButton
+            }
+
+            if (routeInfo.distanceMeters < 10000) {
+                Toast.makeText(context, "Quãng đường quá ngắn để lập lịch (<10km)!", Toast.LENGTH_LONG).show()
+                return@FloatingActionButton // Dừng lại, không gọi AI
+            }
+
+            // 3. Bắt đầu gọi AI
+            isLoadingAI = true
+            mapViewModel.getOrFetchJourneyPlan(
+                originPoint = startPoint,
+                originName = mapViewModel.originName,
+                destPoint = endPoint,
+                destName = mapViewModel.destinationName,
+                distanceMeters = routeInfo.distanceMeters,
+                userWeight = 70.0
+            ) { result ->
+                isLoadingAI = false
+                // Chuyển sang màn hình PlanScreen
+                navController.currentBackStackEntry?.savedStateHandle?.set("ai_plan_result", result)
+                navController.navigate("plan_screen")
+            }
+        },
+        containerColor = MaterialTheme.colorScheme.surface, // Màu nền trắng giống các nút khác
+        contentColor = MaterialTheme.colorScheme.primary,   // Màu icon
+        modifier = Modifier.size(48.dp) // Kích thước chuẩn
+    ) {
+        if (isLoadingAI) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(24.dp),
+                strokeWidth = 3.dp,
+                color = MaterialTheme.colorScheme.primary
+            )
+        } else {
+            Icon(
+                imageVector = Icons.Default.DateRange,
+                contentDescription = "Lập lịch AI",
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }
@@ -1095,68 +1164,13 @@ fun RoutePreviewBottomSheet(
                     }
                 }
 
-                // CỘT PHẢI: Weather + Nút AI
+                // CỘT PHẢI: Weather
                 Column(
                     horizontalAlignment = Alignment.End,
                     modifier = Modifier.width(IntrinsicSize.Max)
                 ) {
                     if (weather != null) {
                         WeatherWidget(weather = weather)
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-
-                    // [NÚT LẬP LỊCH TRÌNH]
-                    Button(
-                        onClick = {
-                            if (isLoadingAI) return@Button
-                            isLoadingAI = true
-
-                            // 1. Lấy tọa độ để check cache
-                            val startPoint = mapViewModel.customOriginPoint ?: mapViewModel.userLocationPoint
-                            val endPoint = mapViewModel.selectedDestination
-
-                            if (startPoint != null && endPoint != null) {
-                                // 2. Gọi hàm thông minh của ViewModel
-                                mapViewModel.getOrFetchJourneyPlan(
-                                    originPoint = startPoint,
-                                    originName = originName,
-                                    destPoint = endPoint,
-                                    destName = destinationName,
-                                    distanceMeters = routeInfo.distanceMeters,
-                                    userWeight = 70.0 // TODO: Lấy từ Profile user thật
-                                ) { result ->
-                                    isLoadingAI = false
-
-                                    // 3. Chuyển trang
-                                    if (routeInfo.distanceMeters < 10000) {
-                                        val thongBao = "Quãng đường dưới 10km quá ngắn để lập lịch!"
-                                        Toast.makeText(context, thongBao, Toast.LENGTH_LONG).show()
-                                    } else {
-                                        navController.currentBackStackEntry?.savedStateHandle?.set("ai_plan_result", result)
-                                        navController.navigate("plan_screen")
-                                    }
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                        ),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
-                        enabled = !isLoadingAI,
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        if (isLoadingAI) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                        } else {
-                            Icon(Icons.Default.DateRange, contentDescription = null, tint = MaterialTheme.colorScheme.onTertiaryContainer, modifier = Modifier.size(18.dp))
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text("Lập lịch AI", color = MaterialTheme.colorScheme.onTertiaryContainer, style = MaterialTheme.typography.labelLarge)
-                        }
                     }
                 }
             }
