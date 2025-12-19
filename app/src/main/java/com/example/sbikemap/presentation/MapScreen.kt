@@ -791,7 +791,39 @@ fun MapScreen(
         }
         // --- UI CŨ (Nút bấm, Style Selector) ---
         else if (permissionsGranted) {
-            // Đặt Search Bar ở đây để nó nằm trên bản đồ
+            Column(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(top = if (shouldShowExpandedUI) 200.dp else 120.dp, end = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                horizontalAlignment = Alignment.End
+            ) {
+
+                AIScheduleFloatingButton(
+                    mapViewModel = mapViewModel,
+                    navController = navController
+                )
+
+                // Nút chọn lớp bản đồ
+                FloatingActionButton(
+                    onClick = { showStyleSheet = true },
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    Icon(painter = painterResource(id = R.drawable.layers), contentDescription = "Chọn lớp bản đồ", modifier = Modifier.size(24.dp))
+                }
+
+                // Nút định vị / La bàn
+                FloatingActionButton(
+                    onClick = {
+                        puckBearingSource = if (puckBearingSource == PuckBearing.HEADING) PuckBearing.COURSE else PuckBearing.HEADING
+                    },
+                    modifier = Modifier.size(48.dp)
+                ) {
+                    if (puckBearingSource == PuckBearing.HEADING) Icon(painter = painterResource(id = R.drawable.direction), contentDescription = "La bàn", modifier = Modifier.size(24.dp))
+                    else Icon(imageVector = Icons.Default.LocationOn, contentDescription = "Vị trí", modifier = Modifier.size(24.dp))
+                }
+            }
             RouteSearchBox(
                 isExpanded = shouldShowExpandedUI,
                 onExpandRequest = { mapViewModel.isSearching = true },
@@ -848,40 +880,6 @@ fun MapScreen(
                     navController.navigate("profile")
                 }
             )
-
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(top = if (shouldShowExpandedUI) 200.dp else 120.dp, end = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-                horizontalAlignment = Alignment.End
-            ) {
-
-                AIScheduleFloatingButton(
-                    mapViewModel = mapViewModel,
-                    navController = navController
-                )
-
-                // Nút chọn lớp bản đồ
-                FloatingActionButton(
-                    onClick = { showStyleSheet = true },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(painter = painterResource(id = R.drawable.layers), contentDescription = "Chọn lớp bản đồ", modifier = Modifier.size(24.dp))
-                }
-
-                // Nút định vị / La bàn
-                FloatingActionButton(
-                    onClick = {
-                        puckBearingSource = if (puckBearingSource == PuckBearing.HEADING) PuckBearing.COURSE else PuckBearing.HEADING
-                    },
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    if (puckBearingSource == PuckBearing.HEADING) Icon(painter = painterResource(id = R.drawable.direction), contentDescription = "La bàn", modifier = Modifier.size(24.dp))
-                    else Icon(imageVector = Icons.Default.LocationOn, contentDescription = "Vị trí", modifier = Modifier.size(24.dp))
-                }
-            }
             // XỬ LÝ HIỂN THỊ THÔNG TIN TUYẾN ĐƯỜNG
             if (mapViewModel.selectedDestination != null && mapViewModel.routeInfo != null) {
 
