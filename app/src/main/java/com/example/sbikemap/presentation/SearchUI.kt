@@ -48,7 +48,8 @@ fun RouteSearchBox(
     destinationAddress: String?,
     onOriginSelected: (Point?, String) -> Unit,      // Callback khi chọn điểm đi (Null = Vị trí của bạn)
     onDestinationSelected: (Point?, String) -> Unit,   // Callback khi chọn điểm đến
-    onCategorySelected: (String) -> Unit
+    onCategorySelected: (String) -> Unit,
+    onProfileClick: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -104,7 +105,8 @@ fun RouteSearchBox(
             // 1. GIAO DIỆN THU GỌN (Giống Google Maps mặc định)
             CompactSearchBar(
                 onClick = onExpandRequest,
-                onCategoryClick = onCategorySelected
+                onCategoryClick = onCategorySelected,
+                onProfileClick = onProfileClick
             )
         } else {
             // --- KHUNG NHẬP LIỆU (2 Ô) ---
@@ -277,7 +279,11 @@ fun RouteSearchBox(
 
 // [MỚI] Giao diện thanh tìm kiếm thu gọn (Google Maps Style)
 @Composable
-fun CompactSearchBar(onClick: () -> Unit, onCategoryClick: (String) -> Unit) {
+fun CompactSearchBar(
+    onClick: () -> Unit,
+    onCategoryClick: (String) -> Unit,
+    onProfileClick: () -> Unit
+) {
     // 1. Tạo InteractionSource để quản lý trạng thái click
     val interactionSource = remember { MutableInteractionSource() }
     var showMenu by remember { mutableStateOf(false) } // State quản lý menu
@@ -297,7 +303,14 @@ fun CompactSearchBar(onClick: () -> Unit, onCategoryClick: (String) -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.padding(horizontal = 16.dp)
         ) {
-            Icon(Icons.Default.Search, contentDescription = null, tint = Color.Black)
+            IconButton(onClick = onProfileClick) {
+                Icon(
+                    imageVector = Icons.Default.Person,
+                    contentDescription = "Hồ sơ",
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
             Spacer(modifier = Modifier.width(16.dp))
             Text(
                 text = "Tìm địa điểm ở đây...",

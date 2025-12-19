@@ -844,6 +844,9 @@ fun MapScreen(
                     // 2. Gọi hàm tìm kiếm
                     searchCategoryNearby(categoryQuery)
                 },
+                onProfileClick = {
+                    navController.navigate("profile")
+                }
             )
 
             Column(
@@ -858,14 +861,6 @@ fun MapScreen(
                     mapViewModel = mapViewModel,
                     navController = navController
                 )
-                // Nút Profile
-                FloatingActionButton(
-                    onClick = { navController.navigate("profile") },
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Icon(Icons.Default.Person, "Hồ sơ cá nhân", modifier = Modifier.size(24.dp))
-                }
 
                 // Nút chọn lớp bản đồ
                 FloatingActionButton(
@@ -917,10 +912,6 @@ fun MapScreen(
                     RoutePreviewBottomSheet(
                         routeInfo = mapViewModel.routeInfo!!,
                         weather = mapViewModel.weatherAtDestination,
-                        originName = mapViewModel.originName,
-                        destinationName = mapViewModel.destinationName,
-                        navController = navController,
-                        mapViewModel = mapViewModel,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
                 }
@@ -1089,16 +1080,8 @@ fun getManeuverTranslation(modifier: String?, type: String?): String {
 fun RoutePreviewBottomSheet(
     routeInfo: RouteInfo,
     weather: WeatherResponse?,
-    originName: String,
-    destinationName: String,
-    navController: NavController,
-    mapViewModel: MapViewModel,
-    onStartNavigation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    // State quản lý trạng thái loading
-    var isLoadingAI by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
     Surface(
