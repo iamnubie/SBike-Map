@@ -11,6 +11,7 @@ import retrofit2.http.GET
 import retrofit2.http.Query
 import android.content.Context
 import com.example.sbikemap.R
+import com.example.sbikemap.data.remote.models.AirPollutionResponse
 
 data class WeatherResponse(
     @SerializedName("weather") val weather: List<WeatherDescription>,
@@ -55,6 +56,13 @@ interface WeatherApi {
         @Query("units") units: String = "metric",
         @Query("lang") lang: String = "vi"
     ): Response<WeatherResponse>
+
+    @GET("data/2.5/air_pollution")
+    suspend fun getAirPollution(
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double,
+        @Query("appid") apiKey: String
+    ): Response<AirPollutionResponse>
 }
 
 // --- 3. OBJECT QUẢN LÝ GỌI API ---
@@ -95,6 +103,17 @@ object WeatherRepository {
         val apiKey = context.getString(R.string.openweather_api_key)
         return try {
             val response = api.getCurrentWeatherSuspend(lat, lon, apiKey)
+            if (response.isSuccessful) response.body() else null
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    suspend fun fetchAirQuality(context: Context, lat: Double, lon: Double): AirPollutionResponse? {
+        val apiKey = context.getString(R.string.openweather_api_key)
+        return try {
+            val response = api.getAirPollution(lat, lon, apiKey)
             if (response.isSuccessful) response.body() else null
         } catch (e: Exception) {
             e.printStackTrace()

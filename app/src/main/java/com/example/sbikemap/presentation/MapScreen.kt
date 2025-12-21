@@ -84,6 +84,7 @@ import coil.compose.SubcomposeAsyncImage
 import coil.compose.SubcomposeAsyncImageContent
 import coil.request.ImageRequest
 import com.example.sbikemap.R
+import com.example.sbikemap.data.remote.models.AirPollutionResponse
 import com.example.sbikemap.utils.RouteRenderer
 import com.example.sbikemap.utils.UserMarker
 import com.example.sbikemap.utils.bitmapFromDrawableRes
@@ -250,18 +251,36 @@ fun MapScreen(
         mapboxNavigation.setNavigationRoutes(emptyList())
     }
 
-    // Khi chọn địa điểm mới -> Gọi API lấy thời tiết
+    // MapScreen.kt - Thêm Log
     LaunchedEffect(mapViewModel.selectedDestination) {
         if (mapViewModel.selectedDestination != null) {
-            WeatherRepository.fetchWeather(
-                context,
-                mapViewModel.selectedDestination!!.latitude(),
-                mapViewModel.selectedDestination!!.longitude()
-            ) { response ->
+            val lat = mapViewModel.selectedDestination!!.latitude()
+            val lon = mapViewModel.selectedDestination!!.longitude()
+
+            // Log tọa độ đang gọi
+            android.util.Log.d("WEATHER_DEBUG", "Bắt đầu gọi API cho: $lat, $lon")
+
+            // 1. Gọi API Thời tiết
+            WeatherRepository.fetchWeather(context, lat, lon) { response ->
+                android.util.Log.d("WEATHER_DEBUG", "Thời tiết trả về: ${response?.main?.temp}")
                 mapViewModel.weatherAtDestination = response
+            }
+
+            // 2. Gọi API AQI
+            try {
+                val aqiResponse = WeatherRepository.fetchAirQuality(context, lat, lon)
+                // Log kết quả AQI
+                val aqiValue = aqiResponse?.list?.firstOrNull()?.main?.aqi
+                android.util.Log.d("WEATHER_DEBUG", "AQI trả về: $aqiValue")
+
+                mapViewModel.airQualityAtDestination = aqiResponse
+            } catch (e: Exception) {
+                android.util.Log.e("WEATHER_DEBUG", "Lỗi gọi AQI: ${e.message}")
+                mapViewModel.airQualityAtDestination = null
             }
         } else {
             mapViewModel.weatherAtDestination = null
+            mapViewModel.airQualityAtDestination = null
         }
     }
 
@@ -910,6 +929,7 @@ fun MapScreen(
                     RoutePreviewBottomSheet(
                         routeInfo = mapViewModel.routeInfo!!,
                         weather = mapViewModel.weatherAtDestination,
+                        airQuality = mapViewModel.airQualityAtDestination,
                         modifier = Modifier.align(Alignment.BottomCenter)
                     )
                 }
@@ -1078,6 +1098,7 @@ fun getManeuverTranslation(modifier: String?, type: String?): String {
 fun RoutePreviewBottomSheet(
     routeInfo: RouteInfo,
     weather: WeatherResponse?,
+    airQuality: AirPollutionResponse?,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1151,7 +1172,7 @@ fun RoutePreviewBottomSheet(
                     modifier = Modifier.width(IntrinsicSize.Max)
                 ) {
                     if (weather != null) {
-                        WeatherWidget(weather = weather)
+                        WeatherWidget(weather = weather, airQuality = airQuality)
                     }
                 }
             }
@@ -1177,36 +1198,78 @@ fun formatDistance(meters: Double): String {
 }
 
 @Composable
-fun WeatherWidget(weather: WeatherResponse) {
+fun WeatherWidget(
+    weather: WeatherResponse,
+    airQuality: AirPollutionResponse? = null
+) {
     val iconCode = weather.weather.firstOrNull()?.icon ?: "01d"
     val iconUrl = "https://openweathermap.org/img/wn/${iconCode}@4x.png"
+    val description = weather.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() } ?: ""
+
+    // Lấy chỉ số AQI
+    val aqi = airQuality?.list?.firstOrNull()?.main?.aqi ?: 0
+
+    // Logic màu sắc và text AQI
+    val (aqiColor, aqiText) = when (aqi) {
+        1 -> Color(0xFF4CAF50) to "Tốt"       // Xanh lá
+        2 -> Color(0xFFFFEB3B) to "Khá"       // Vàng
+        3 -> Color(0xFFFF9800) to "TB"        // Cam
+        4 -> Color(0xFFF44336) to "Kém"       // Đỏ
+        5 -> Color(0xFF9C27B0) to "Nguy hại"  // Tím
+        else -> Color.Gray to "N/A"
+    }
+    // Màu chữ trong thẻ AQI (Nếu nền vàng thì chữ đen cho dễ đọc, còn lại chữ trắng)
+    val aqiTextColor = if (aqi == 2) Color.Black else Color.White
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier
             .background(
-                color = Color(0xFFE3F2FD), // Nền xanh nhạt của cả cụm
+                color = Color(0xFFE3F2FD), // Nền xanh nhạt tổng thể
                 shape = RoundedCornerShape(12.dp)
             )
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+            .padding(8.dp) // Padding tổng thể
     ) {
+        // CỘT THÔNG TIN (Bên trái)
         Column(horizontalAlignment = Alignment.End) {
+            // 1. Nhiệt độ
             Text(
                 text = "${weather.main.temp.toInt()}°C",
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
                 color = Color.Black
             )
+
+            // 2. Mô tả thời tiết (Luôn hiển thị)
             Text(
-                text = weather.weather.firstOrNull()?.description?.replaceFirstChar { it.uppercase() } ?: "",
-                style = MaterialTheme.typography.bodySmall,
-                color = Color.DarkGray
+                text = description,
+                style = MaterialTheme.typography.labelSmall, // Font nhỏ
+                color = Color.DarkGray,
+                maxLines = 1
             )
+
+            // 3. Thẻ AQI (Chỉ hiện nếu có dữ liệu > 0)
+            if (aqi > 0) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Surface(
+                    color = aqiColor,
+                    shape = RoundedCornerShape(4.dp),
+                    modifier = Modifier.padding(top = 2.dp)
+                ) {
+                    Text(
+                        text = "AQI $aqi • $aqiText",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = aqiTextColor,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+            }
         }
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // [GIẢI PHÁP MỚI: DÙNG SUBCOMPOSE ĐỂ KIỂM SOÁT]
+        // ICON THỜI TIẾT (Bên phải)
         SubcomposeAsyncImage(
             model = ImageRequest.Builder(LocalContext.current)
                 .data(iconUrl)
@@ -1214,22 +1277,20 @@ fun WeatherWidget(weather: WeatherResponse) {
                 .build(),
             contentDescription = "Weather Icon",
             modifier = Modifier
-                .size(48.dp)
-                .background(Color.White, androidx.compose.foundation.shape.CircleShape) // Nền trắng
-                .padding(4.dp) // Padding để icon nằm gọn trong vòng trắng
+                .size(48.dp) // Kích thước icon
+                .background(Color.White, androidx.compose.foundation.shape.CircleShape)
+                .padding(4.dp)
         ) {
             val state = painter.state
             if (state is coil.compose.AsyncImagePainter.State.Loading || state is coil.compose.AsyncImagePainter.State.Error) {
                 Icon(
-                    imageVector = Icons.Default.Warning, // Icon cảnh báo nếu lỗi
+                    imageVector = Icons.Default.Warning,
                     contentDescription = null,
-                    tint = Color.Gray
+                    tint = Color.Gray,
+                    modifier = Modifier.padding(8.dp)
                 )
             } else {
-                // Tải thành công -> Vẽ ảnh GỐC, KHÔNG FILTER
-                SubcomposeAsyncImageContent(
-                    colorFilter = null //  Đảm bảo không tô màu
-                )
+                SubcomposeAsyncImageContent(colorFilter = null)
             }
         }
     }

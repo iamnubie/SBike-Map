@@ -1,6 +1,7 @@
 package com.example.sbikemap.utils
 
 import android.content.Context
+import com.example.sbikemap.data.remote.models.AirPollutionResponse
 import com.mapbox.geojson.LineString
 import com.mapbox.geojson.Point
 import com.mapbox.turf.TurfConstants
@@ -12,12 +13,13 @@ import kotlinx.coroutines.withContext
 
 data class RouteWeatherPoint(
     val point: Point,
-    val weather: WeatherResponse
+    val weather: WeatherResponse,
+    val airQuality: AirPollutionResponse? = null
 )
 
 object RouteWeatherLogic {
 
-    // Hàm chính: Tính toán điểm và lấy dữ liệu thời tiết
+    // Hàm chính: Tính toán điểm và lấy dữ liệu thời tiết + AQI
     suspend fun generateRouteWeatherMarkers(
         context: Context,
         routeGeometry: LineString // Hình học của tuyến đường
@@ -27,13 +29,12 @@ object RouteWeatherLogic {
         val pointsToCheck = mutableListOf<Point>()
 
         if (totalDistanceKm < 5.0) {
-            // Nếu dưới 5km -> Lấy điểm giữa (50% quãng đường)
+            // Nếu dưới 5km -> Lấy điểm giữa
             val midDistance = totalDistanceKm / 2
             val midPoint = TurfMeasurement.along(routeGeometry, midDistance, TurfConstants.UNIT_KILOMETERS)
             pointsToCheck.add(midPoint)
         } else {
             // Nếu trên 5km -> Lấy mỗi 5km một điểm
-            // Bắt đầu từ km thứ 5, bỏ qua điểm xuất phát (0km) vì thường user đã biết thời tiết ở đó
             var currentDist = 5.0
             while (currentDist < totalDistanceKm) {
                 val p = TurfMeasurement.along(routeGeometry, currentDist, TurfConstants.UNIT_KILOMETERS)
@@ -42,15 +43,36 @@ object RouteWeatherLogic {
             }
         }
 
-        // Gọi API song song cho tất cả các điểm (nhanh hơn gọi tuần tự)
-        val weatherTasks = pointsToCheck.map { point ->
+        // Gọi song song cả Weather và AQI cho từng điểm
+        val tasks = pointsToCheck.map { point ->
             async {
-                val weather = WeatherRepository.fetchWeatherSuspend(context, point.latitude(), point.longitude())
-                if (weather != null) RouteWeatherPoint(point, weather) else null
+                val lat = point.latitude()
+                val lon = point.longitude()
+
+                // Chạy 2 luồng con song song để tiết kiệm thời gian
+                val weatherDeferred = async { WeatherRepository.fetchWeatherSuspend(context, lat, lon) }
+                // Lưu ý: Đảm bảo hàm fetchAirQuality đã có trong WeatherRepository
+                val aqiDeferred = async {
+                    try {
+                        WeatherRepository.fetchAirQuality(context, lat, lon)
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+
+                val weather = weatherDeferred.await()
+                val aqi = aqiDeferred.await()
+
+                // Chỉ tạo Point khi lấy được thời tiết (AQI có thể null cũng được)
+                if (weather != null) {
+                    RouteWeatherPoint(point, weather, aqi)
+                } else {
+                    null
+                }
             }
         }
 
-        // Trả về danh sách kết quả (loại bỏ các điểm lỗi null)
-        weatherTasks.awaitAll().filterNotNull()
+        // Trả về danh sách kết quả (loại bỏ null)
+        tasks.awaitAll().filterNotNull()
     }
 }

@@ -49,14 +49,22 @@ fun WeatherRouteMarker(
         // Lấy description thay vì main, và viết hoa chữ cái đầu cho đẹp
         val rawDescription = weather.weather.firstOrNull()?.description ?: ""
         val displayDescription = rawDescription.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        val aqi = data.airQuality?.list?.firstOrNull()?.main?.aqi ?: 0
+        val (aqiColor, aqiText) = when (aqi) {
+            1 -> Color(0xFF4CAF50) to "Tốt"       // Xanh lá
+            2 -> Color(0xFFFBC02D) to "Khá"       // Vàng đậm (dễ nhìn hơn vàng tươi)
+            3 -> Color(0xFFFF9800) to "TB"        // Cam
+            4 -> Color(0xFFF44336) to "Kém"       // Đỏ
+            5 -> Color(0xFF9C27B0) to "Xấu"       // Tím
+            else -> Color.Gray to ""
+        }
 
         // Thiết kế UI giống trong ảnh (Rounded Box, Shadow)
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier
-                .shadow(4.dp, RoundedCornerShape(16.dp))
                 .background(Color.White, RoundedCornerShape(16.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp)
+                .padding(horizontal = 8.dp, vertical = 2.dp)
         ) {
             // Cột nhiệt độ & Thời gian (hoặc mô tả)
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -71,6 +79,15 @@ fun WeatherRouteMarker(
                     fontSize = 10.sp,
                     color = Color.Gray
                 )
+                if (aqi > 0) {
+                    Spacer(modifier = Modifier.size(2.dp))
+                    Text(
+                        text = "AQI $aqi • $aqiText",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = aqiColor // Tô màu theo mức độ
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(4.dp))

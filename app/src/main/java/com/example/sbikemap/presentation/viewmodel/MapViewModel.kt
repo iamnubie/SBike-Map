@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.sbikemap.data.remote.AuthApi
 import com.example.sbikemap.data.remote.TripApi
+import com.example.sbikemap.data.remote.models.AirPollutionResponse
 import com.example.sbikemap.data.remote.models.CreateTripRequest
 import com.example.sbikemap.presentation.MapStyleItem
 import com.example.sbikemap.presentation.RouteInfo
@@ -49,6 +50,7 @@ class MapViewModel(
     // 4. Thời tiết
     var weatherAtDestination by mutableStateOf<WeatherResponse?>(null)
     var routeWeatherList by mutableStateOf<List<RouteWeatherPoint>>(emptyList())
+    var airQualityAtDestination by mutableStateOf<AirPollutionResponse?>(null)
 
     // 5. Trạng thái tìm kiếm UI
     var isSearching by mutableStateOf(false)

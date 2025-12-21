@@ -64,7 +64,9 @@ import java.time.format.DateTimeFormatter
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.SolidColor
@@ -75,6 +77,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import com.example.sbikemap.R
+import com.mapbox.navigation.core.MapboxNavigation
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -196,22 +199,13 @@ fun UserProfileScreen(
                     onClick = { navController.navigate("history_screen") } // Navigate sang màn mới
                 )
 
-                ProfileOptionItem(
-                    icon = Icons.Default.ExitToApp,
-                    title = "Tải bản đồ Offline (Q12)",
-                    subtitle = "Tải dữ liệu bản đồ & dẫn đường",
-                    iconModifier = Modifier.rotate(90f)
-                ) { OfflineUtils.downloadOfflineRegion(context, mapboxNavigation) }
+                OfflineMapCard(
+                    context = context,
+                    mapboxNavigation = mapboxNavigation
+                )
 
-                ProfileOptionItem(
-                    icon = Icons.Default.Delete,
-                    title = "Xóa bản đồ Offline (Q12)",
-                    subtitle = "Giải phóng bộ nhớ máy",
-                    iconTint = Color.Red
-                ) { OfflineUtils.removeOfflineRegion(context) }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                HorizontalDivider()
+                Spacer(modifier = Modifier.height(24.dp))
+                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
                 Spacer(modifier = Modifier.height(16.dp))
             }
 
