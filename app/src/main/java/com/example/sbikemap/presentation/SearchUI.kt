@@ -1,5 +1,6 @@
 package com.example.sbikemap.presentation
 
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -24,8 +25,12 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.sbikemap.App
+import com.example.sbikemap.data.remote.models.SavePlaceRequest
+import com.example.sbikemap.data.remote.models.SmartPlaceResponse
 import com.mapbox.common.MapboxOptions
 import com.mapbox.geojson.Point
+import com.mapbox.maps.Style
 import com.mapbox.search.autocomplete.PlaceAutocomplete
 import com.mapbox.search.autocomplete.PlaceAutocompleteSuggestion
 import kotlinx.coroutines.launch
@@ -39,6 +44,12 @@ val CYCLING_CATEGORIES = mapOf(
     "Trạm sạc" to "charging_station",
     "ATM" to "atm"
 )
+// Định nghĩa sealed class để list có thể chứa cả 3 loại item
+sealed class SearchItemUi {
+    data class SmartAction(val query: String) : SearchItemUi() // Dòng bấm "Tìm thông minh..."
+    data class MapboxItem(val data: PlaceAutocompleteSuggestion) : SearchItemUi() // Kết quả Mapbox
+    data class BackendItem(val data: SmartPlaceResponse) : SearchItemUi() // Kết quả từ Backend trả về
+}
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RouteSearchBox(
@@ -54,6 +65,14 @@ fun RouteSearchBox(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+
+    val appContainer = App.container
+    val searchApi = appContainer.searchApi
+
+    var uiSuggestions by remember { mutableStateOf<List<SearchItemUi>>(emptyList()) }
+    // State xác định đang focus vào ô nào: "NONE", "ORIGIN", "DEST"
+    var activeField by remember { mutableStateOf("NONE") }
+    var isLoadingAI by remember { mutableStateOf(false) }
 
     // State cho text hiển thị
     var originQuery by remember { mutableStateOf("Vị trí của bạn") }
@@ -71,9 +90,6 @@ fun RouteSearchBox(
             destQuery = destinationAddress
         }
     }
-
-    // State xác định đang focus vào ô nào: "NONE", "ORIGIN", "DEST"
-    var activeField by remember { mutableStateOf("NONE") }
 
     // List gợi ý
     var suggestions by remember { mutableStateOf<List<PlaceAutocompleteSuggestion>>(emptyList()) }
@@ -95,7 +111,63 @@ fun RouteSearchBox(
             suggestions = emptyList()
         }
     }
-
+    // Hàm Search Mapbox cơ bản
+    fun performMapboxSearch(query: String) {
+        if (query.isEmpty()) {
+            uiSuggestions = emptyList()
+            return
+        }
+        scope.launch {
+            val response = placeAutocomplete.suggestions(query)
+            response.onValue { mapboxResults ->
+                // Tạo list hỗn hợp:
+                // 1. Dòng "Tìm kiếm thông minh"
+                // 2. Các kết quả từ Mapbox
+                val list = mutableListOf<SearchItemUi>()
+                list.add(SearchItemUi.SmartAction(query)) // Luôn chèn đầu tiên
+                list.addAll(mapboxResults.map { SearchItemUi.MapboxItem(it) })
+                uiSuggestions = list
+            }.onError { uiSuggestions = emptyList() }
+        }
+    }
+    // Hàm gọi Backend AI Search
+    fun performSmartSearch(query: String) {
+        isLoadingAI = true
+        scope.launch {
+            try {
+                val results = searchApi.smartSearch(query)
+                // Sau khi có kết quả, thay thế toàn bộ list gợi ý bằng kết quả từ AI
+                uiSuggestions = results.map { SearchItemUi.BackendItem(it) }
+                if (results.isEmpty()) {
+                    Toast.makeText(context, "Chưa thấy được địa điểm nào khớp!", Toast.LENGTH_SHORT).show()
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Lỗi kết nối AI: ${e.message}", Toast.LENGTH_SHORT).show()
+            } finally {
+                isLoadingAI = false
+            }
+        }
+    }
+    // Hàm lưu địa điểm vào DB (Crowdsourcing)
+    fun savePlaceToBackend(name: String, address: String?, category: String?, lat: Double, lng: Double) {
+        scope.launch {
+            try {
+                searchApi.savePlace(
+                    SavePlaceRequest(
+                        name = name,
+                        address = address,
+                        // Sử dụng biến category được truyền vào, nếu null thì mới dùng fallback
+                        category = category ?: "Địa điểm người dùng chọn",
+                        lat = lat,
+                        lng = lng
+                    )
+                )
+                android.util.Log.d("SMART_SEARCH", "Đã lưu: $name - $category")
+            } catch (e: Exception) {
+                android.util.Log.e("SMART_SEARCH", "Lỗi lưu DB: ${e.message}")
+            }
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -118,142 +190,151 @@ fun RouteSearchBox(
                 Column(modifier = Modifier.padding(8.dp)) {
 
                     // 1. Ô ĐIỂM ĐI (ORIGIN)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Home,
-                            contentDescription = "Start",
-                            tint = Color.Blue,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextField(
-                            value = originQuery,
-                            onValueChange = {
-                                originQuery = it
-                                performSearch(it) // Search khi gõ
-                            },
-                            placeholder = { Text("Chọn điểm đi") },
-                            singleLine = true,
-                            textStyle = TextStyle(fontSize = 15.sp, color = Color.Black),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = Color.Black,
-                                unfocusedTextColor = Color.Black,
-                                cursorColor = Color.Black
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .onFocusChanged { focusState ->
-                                    if (focusState.isFocused) {
-                                        activeField = "ORIGIN"
-                                        // Nếu đang là mặc định thì xóa text để user nhập
-                                        if (originQuery == "Vị trí của bạn") originQuery = ""
-                                    }
-                                },
-                            trailingIcon = {
-                                if (activeField == "ORIGIN" && originQuery.isNotEmpty()) {
-                                    IconButton(onClick = {
-                                        originQuery = ""
-                                        suggestions = emptyList()
-                                        onOriginSelected(null, "Vị trí của bạn")
-                                    },
-                                        modifier = Modifier.size(24.dp)
-                                        ) {
-                                        Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
-                                    }
-                                }
-                            }
-                        )
-                    }
+                    SearchTextFieldRow(
+                        icon = Icons.Default.Home,
+                        iconTint = Color.Blue,
+                        value = originQuery,
+                        placeholder = "Chọn điểm đi",
+                        onValueChange = {
+                            originQuery = it
+                            performMapboxSearch(it) // <--- QUAN TRỌNG: Gọi hàm search mới
+                        },
+                        onClear = {
+                            originQuery = ""
+                            onOriginSelected(null, "Vị trí của bạn")
+                        },
+                        isFocused = activeField == "ORIGIN",
+                        onFocus = {
+                            activeField = "ORIGIN"
+                            // Tự động xóa chữ mặc định để nhập cho nhanh
+                            if (originQuery == "Vị trí của bạn") originQuery = ""
+                        }
+                    )
 
                     HorizontalDivider(modifier = Modifier.padding(horizontal = 32.dp), thickness = 0.5.dp)
 
                     // 2. Ô ĐIỂM ĐẾN (DESTINATION)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = "End",
-                            tint = Color.Red,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        TextField(
-                            value = destQuery,
-                            onValueChange = {
-                                destQuery = it
-                                performSearch(it)
-                            },
-                            placeholder = { Text("Chọn điểm đến") },
-                            singleLine = true,
-                            textStyle = TextStyle(fontSize = 15.sp, color = Color.Black),
-                            colors = TextFieldDefaults.colors(
-                                focusedContainerColor = Color.Transparent,
-                                unfocusedContainerColor = Color.Transparent,
-                                focusedIndicatorColor = Color.Transparent,
-                                unfocusedIndicatorColor = Color.Transparent,
-                                focusedTextColor = Color.Black,
-                                unfocusedTextColor = Color.Black,
-                                cursorColor = Color.Black
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .onFocusChanged { focusState ->
-                                    if (focusState.isFocused) {
-                                        activeField = "DEST"
-                                    }
-                                },
-                            trailingIcon = {
-                                if (activeField == "DEST" && destQuery.isNotEmpty()) {
-                                    IconButton(onClick = {
-                                        destQuery = ""
-                                        suggestions = emptyList()
-                                        onDestinationSelected(null, "")
-                                    },
-                                        modifier = Modifier.size(24.dp)
-                                        ) {
-                                        Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
-                                    }
-                                }
-                            }
-                        )
-                    }
+                    SearchTextFieldRow(
+                        icon = Icons.Default.LocationOn,
+                        iconTint = Color.Red,
+                        value = destQuery,
+                        placeholder = "Chọn điểm đến",
+                        onValueChange = {
+                            destQuery = it
+                            performMapboxSearch(it) // <--- QUAN TRỌNG: Gọi hàm search mới
+                        },
+                        onClear = {
+                            destQuery = ""
+                            onDestinationSelected(null, "")
+                        },
+                        isFocused = activeField == "DEST",
+                        onFocus = { activeField = "DEST" }
+                    )
                 }
             }
         }
 
         // --- DANH SÁCH GỢI Ý ---
-        if (isExpanded && activeField != "NONE" && suggestions.isNotEmpty()) {
+        // Lưu ý: Đổi điều kiện kiểm tra từ 'suggestions' sang 'uiSuggestions'
+        if (isExpanded && activeField != "NONE" && uiSuggestions.isNotEmpty()) {
             Spacer(modifier = Modifier.height(8.dp))
             Surface(
                 modifier = Modifier.shadow(4.dp, RoundedCornerShape(8.dp)),
                 shape = RoundedCornerShape(8.dp),
                 color = Color.White
             ) {
-                LazyColumn(modifier = Modifier.heightIn(max = 250.dp)) {
-                    // Item đặc biệt cho "Vị trí của bạn" (Chỉ hiện khi chọn điểm đi)
+                LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) { // Tăng chiều cao lên chút
+
+                    // 1. Item "Vị trí của bạn" (Chỉ hiện khi đang chọn điểm đi)
                     if (activeField == "ORIGIN") {
                         item {
-                            SuggestionItemRaw("Vị trí của bạn (Mặc định)", "Vị trí hiện tại GPS") {
+                            SuggestionItemRaw("Vị trí của bạn (Mặc định)", "GPS hiện tại") {
                                 originQuery = "Vị trí của bạn"
                                 activeField = "NONE"
-                                suggestions = emptyList()
+                                uiSuggestions = emptyList() // Xóa list gợi ý
                                 focusManager.clearFocus()
-                                onOriginSelected(null, "Vị trí của bạn") // Null -> User location
+                                onOriginSelected(null, "Vị trí của bạn")
                             }
                         }
                     }
 
-                    items(suggestions) { suggestion ->
-                        SuggestionItem(suggestion) {
-                            // Xử lý khi chọn
-                            scope.launch {
-                                val response = placeAutocomplete.select(suggestion)
-                                response.onValue { result ->
-                                    val point = result.coordinate
-                                    val name = suggestion.name
+                    // 2. Duyệt qua danh sách hỗn hợp (SearchItemUi)
+                    items(uiSuggestions) { item ->
+                        val interactionSource = remember { MutableInteractionSource() }
+                        when (item) {
+                            // --- LOẠI A: Dòng kích hoạt "Tìm kiếm thông minh..." ---
+                            is SearchItemUi.SmartAction -> {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable(
+                                            interactionSource = interactionSource,
+                                            indication = null
+                                        ) { performSmartSearch(item.query) } // Gọi API AI
+                                        .background(Color(0xFFE3F2FD)) // Màu xanh nhạt nổi bật
+                                        .padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    if (isLoadingAI) {
+                                        CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    } else {
+                                        Icon(Icons.Default.Star, contentDescription = null, tint = Color(0xFF673AB7)) // Màu tím AI
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    Text(
+                                        text = "Tìm kiếm thông minh: \"${item.query}\"",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color(0xFF673AB7)
+                                    )
+                                }
+                            }
+
+                            // --- LOẠI B: Kết quả từ Mapbox (Cần lấy Category & Lưu về Backend) ---
+                            is SearchItemUi.MapboxItem -> {
+                                SuggestionItem(item.data) {
+                                    scope.launch {
+                                        val response = placeAutocomplete.select(item.data)
+                                        response.onValue { result ->
+                                            val point = result.coordinate
+                                            val name = item.data.name
+                                            val address = item.data.formattedAddress ?: "Không có địa chỉ"
+
+                                            // Lấy danh mục từ Mapbox & Gửi về Backend
+                                            val categoryFromMapbox = result.categories?.joinToString(", ")
+
+                                            savePlaceToBackend(
+                                                name = name,
+                                                address = address,
+                                                category = categoryFromMapbox, // Truyền category vào đây
+                                                lat = point.latitude(),
+                                                lng = point.longitude()
+                                            )
+                                            // ----------------------------------------------------
+
+                                            if (activeField == "ORIGIN") {
+                                                originQuery = name
+                                                onOriginSelected(point, name)
+                                            } else {
+                                                destQuery = name
+                                                onDestinationSelected(point, name)
+                                            }
+
+                                            // Reset trạng thái
+                                            activeField = "NONE"
+                                            uiSuggestions = emptyList()
+                                            focusManager.clearFocus()
+                                        }
+                                    }
+                                }
+                            }
+
+                            // --- LOẠI C: Kết quả từ Backend AI trả về ---
+                            is SearchItemUi.BackendItem -> {
+                                SuggestionItemRaw(item.data.name, item.data.address ?: "Gợi ý từ AI") {
+                                    // Backend trả về mảng [lng, lat]
+                                    val point = Point.fromLngLat(item.data.location.coordinates[0], item.data.location.coordinates[1])
+                                    val name = item.data.name
 
                                     if (activeField == "ORIGIN") {
                                         originQuery = name
@@ -265,7 +346,7 @@ fun RouteSearchBox(
 
                                     // Reset trạng thái
                                     activeField = "NONE"
-                                    suggestions = emptyList()
+                                    uiSuggestions = emptyList()
                                     focusManager.clearFocus()
                                 }
                             }
@@ -396,5 +477,56 @@ fun SuggestionItemRaw(title: String, subtitle: String, onClick: () -> Unit) {
             Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Bold)
             Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         }
+    }
+}
+
+// Hàm Helper để vẽ ô nhập liệu cho gọn code
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchTextFieldRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    value: String,
+    placeholder: String,
+    onValueChange: (String) -> Unit,
+    onClear: () -> Unit,
+    isFocused: Boolean,
+    onFocus: () -> Unit
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconTint,
+            modifier = Modifier.size(20.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        TextField(
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = { Text(placeholder) },
+            singleLine = true,
+            textStyle = TextStyle(fontSize = 15.sp, color = Color.Black),
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = Color.Transparent,
+                unfocusedContainerColor = Color.Transparent,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent,
+                focusedTextColor = Color.Black,
+                unfocusedTextColor = Color.Black,
+                cursorColor = Color.Black
+            ),
+            modifier = Modifier
+                .fillMaxWidth()
+                .onFocusChanged { if (it.isFocused) onFocus() },
+            trailingIcon = {
+                // Chỉ hiện nút X khi đang focus và có chữ
+                if (isFocused && value.isNotEmpty()) {
+                    IconButton(onClick = onClear, modifier = Modifier.size(24.dp)) {
+                        Icon(Icons.Default.Close, contentDescription = "Clear", tint = Color.Gray)
+                    }
+                }
+            }
+        )
     }
 }

@@ -9,27 +9,6 @@ import com.example.sbikemap.utils.TokenManager
 import okhttp3.OkHttpClient
 import java.util.concurrent.TimeUnit
 
-// Đối tượng đơn giản để quản lý dependencies
-//object AppContainer {
-//    private const val BASE_URL = "http://10.0.2.2:3000"
-//
-//    // 1. Khởi tạo Retrofit
-//    private val retrofit: Retrofit = Retrofit.Builder()
-//        .baseUrl(BASE_URL)
-//        .addConverterFactory(GsonConverterFactory.create())
-//        .build()
-//
-//    // 2. Khởi tạo AuthApi
-//    private val authApi: AuthApi by lazy {
-//        retrofit.create(AuthApi::class.java)
-//    }
-//
-//    // 3. Khởi tạo AuthRepository
-//    val authRepository: AuthRepository by lazy {
-//        AuthRepository(authApi)
-//    }
-//}
-
 class AppContainer(private val applicationContext: Context) {
 
 //    private val BASE_URL = "http://10.0.2.2:3000"
@@ -73,5 +52,9 @@ class AppContainer(private val applicationContext: Context) {
     // 5. Khởi tạo AuthRepository
     val authRepository: AuthRepository by lazy {
         AuthRepository(authApi)
+    }
+
+    val searchApi: SearchApi by lazy {
+        retrofit.create(SearchApi::class.java)
     }
 }

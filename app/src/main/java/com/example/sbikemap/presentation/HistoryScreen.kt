@@ -145,9 +145,10 @@ fun formatDate(isoString: String): String {
     return try {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val parsed = ZonedDateTime.parse(isoString)
-            parsed.format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"))
+            val localTime = parsed.withZoneSameInstant(java.time.ZoneId.systemDefault())
+            localTime.format(DateTimeFormatter.ofPattern("HH:mm - dd/MM/yyyy"))
         } else {
-            isoString.take(10)
+            isoString.take(16).replace("T", " ")
         }
     } catch (e: Exception) {
         isoString

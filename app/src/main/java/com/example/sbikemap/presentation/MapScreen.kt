@@ -310,8 +310,6 @@ fun MapScreen(
         })
     }
 
-
-
     // Tự động tính toán khi routeInfo thay đổi (có đường mới hoặc xóa đường)
     LaunchedEffect(mapViewModel.routeInfo) {
         if (mapViewModel.routeInfo != null) {
