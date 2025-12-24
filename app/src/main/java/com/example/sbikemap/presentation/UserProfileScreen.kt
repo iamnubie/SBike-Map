@@ -68,7 +68,9 @@ import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DateRange
+import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -135,119 +137,180 @@ fun UserProfileScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Hồ sơ cá nhân") },
-                navigationIcon = {
-                    IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Quay lại")
-                    }
-                }
-            )
-        }
-    ) { paddingValues ->
-        LazyColumn(
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val primaryContainerColor = MaterialTheme.colorScheme.primaryContainer
+
+    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF2F4F7))) { // Màu nền xám nhạt hiện đại
+
+        // 1. HEADER CONG MÀU XANH (Nền trên cùng)
+        Box(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .padding(16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // THÔNG TIN USER (AVATAR, TÊN)
-            item {
-                UserInfoSection(
-                    name = currentDisplayName,
-                    email = userEmail,
-                    avatarUrl = currentAvatarUrl,
-                    onEditClick = { showEditDialog = true },
-                    onAvatarChange = { newUri ->
-                        Toast.makeText(context, "Đang tải ảnh lên...", Toast.LENGTH_SHORT).show()
-                        viewModel.uploadAvatar(context, newUri) { newUrl ->
-                            currentAvatarUrl = newUrl
-                            Toast.makeText(context, "Đổi ảnh đại diện thành công!", Toast.LENGTH_SHORT).show()
-                        }
-                    }
+                .fillMaxWidth()
+                .height(280.dp)
+                .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(primaryColor, primaryColor.copy(alpha = 0.8f))
+                    )
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
+        )
 
-            // CẬP NHẬT THỂ TRẠNG (CÂN NẶNG)
-            item {
-                WeightInputCard(
-                    weightInput = weightInput,
-                    onWeightChange = { newValue -> weightInput = newValue },
-                    currentSavedWeight = profileViewModel.userWeight,
-                    onSave = { newWeight ->
-                        // Gọi ViewModel xử lý lưu
-                        profileViewModel.saveUserWeight(newWeight, context)
-                    }
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
-            }
-
-            // PHẦN 3: CÁC TÙY CHỌN (Offline Map)
-            item {
-//                ProfileOptionItem(Icons.Default.Settings, "Cài đặt chung", "Ngôn ngữ, Giao diện") {}
-
-                ProfileOptionItem(
-                    icon = Icons.Default.DateRange,
-                    title = "Lịch sử chuyến đi",
-                    subtitle = "Xem lại các hành trình đã qua",
-                    onClick = { navController.navigate("history_screen") } // Navigate sang màn mới
-                )
-
-                OfflineMapCard(
-                    context = context,
-                    mapboxNavigation = mapboxNavigation
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-                HorizontalDivider(color = Color.LightGray.copy(alpha = 0.5f))
-                Spacer(modifier = Modifier.height(16.dp))
-            }
-
-            // PHẦN 4: ĐĂNG XUẤT
-            item {
-                Spacer(modifier = Modifier.height(32.dp))
-                Button(
-                    onClick = {
-                        viewModel.logout()
-                        Firebase.auth.signOut()
-                        navController.navigate("login") {
-                            popUpTo("profile") { inclusive = true }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.errorContainer)
+        Column(modifier = Modifier.fillMaxSize()) {
+            // 2. TOP BAR (Trong suốt để đè lên nền xanh)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 42.dp, start = 16.dp, end = 16.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(
+                    onClick = { navController.popBackStack() },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color.White.copy(alpha = 0.2f), CircleShape)
                 ) {
-                    Icon(Icons.Default.ExitToApp, contentDescription = null, tint = Color.Red)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Đăng xuất", color = Color.Red)
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = Color.White
+                    )
                 }
-                Spacer(modifier = Modifier.height(32.dp)) // Padding đáy
+                Spacer(modifier = Modifier.width(16.dp))
+                Text(
+                    text = "Hồ sơ cá nhân",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            // 3. NỘI DUNG CHÍNH (Cuộn được)
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // AVATAR & INFO (Nổi lên trên nền xanh)
+                item {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    UserInfoCard(
+                        name = currentDisplayName,
+                        email = userEmail,
+                        avatarUrl = currentAvatarUrl,
+                        onEditClick = { showEditDialog = true },
+                        onAvatarChange = { newUri ->
+                            Toast.makeText(context, "Đang tải ảnh lên...", Toast.LENGTH_SHORT).show()
+                            viewModel.uploadAvatar(context, newUri) { newUrl ->
+                                currentAvatarUrl = newUrl
+                                Toast.makeText(context, "Đổi ảnh thành công!", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                // --- KHỐI: SỨC KHỎE (Cân nặng) ---
+                item {
+                    SectionTitle("Chỉ số sức khỏe")
+                    WeightInputCard(
+                        weightInput = weightInput,
+                        onWeightChange = { newValue -> weightInput = newValue },
+                        currentSavedWeight = profileViewModel.userWeight,
+                        onSave = { newWeight ->
+                            profileViewModel.saveUserWeight(newWeight, context)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                // --- KHỐI: TIỆN ÍCH (Lịch sử, Map Offline) ---
+                item {
+                    SectionTitle("Tiện ích")
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column {
+                            ProfileOptionItem(
+                                icon = Icons.Default.DateRange,
+                                title = "Lịch sử chuyến đi",
+                                subtitle = "Xem lại hành trình đã qua",
+                                onClick = { navController.navigate("history_screen") }
+                            )
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp), color = Color.LightGray.copy(alpha = 0.3f))
+
+                            // Nhúng Card Offline Map vào đây nhưng bỏ viền để liền mạch
+                            Box(modifier = Modifier.padding(horizontal = 0.dp)) {
+                                OfflineMapCard(context = context, mapboxNavigation = mapboxNavigation)
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                // --- KHỐI: CÀI ĐẶT KHÁC (Đăng xuất) ---
+                item {
+                    SectionTitle("Hệ thống")
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.cardColors(containerColor = Color.White),
+                        elevation = CardDefaults.cardElevation(2.dp)
+                    ) {
+                        Column {
+                            // Nút Đăng xuất
+                            Surface(
+                                onClick = {
+                                    viewModel.logout()
+                                    Firebase.auth.signOut()
+                                    navController.navigate("login") { popUpTo("profile") { inclusive = true } }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                color = Color.Transparent
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(16.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(40.dp)
+                                            .background(Color(0xFFFFEBEE), CircleShape), // Nền đỏ nhạt
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(Icons.Default.ExitToApp, null, tint = Color.Red)
+                                    }
+                                    Spacer(modifier = Modifier.width(16.dp))
+                                    Text(
+                                        text = "Đăng xuất",
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        color = Color.Red,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(40.dp))
+                }
             }
         }
-        // [LOGIC DIALOG SỬA TÊN]
+
+        // Dialog
         if (showEditDialog) {
             EditNameDialog(
                 currentName = currentDisplayName,
                 onDismiss = { showEditDialog = false },
                 onConfirm = { newName ->
-                    // Gọi ViewModel cập nhật
-                    viewModel.updateUserName(
-                        newName = newName,
-                        onSuccess = {
-                            // Cập nhật UI ngay lập tức
-                            currentDisplayName = newName
-                            showEditDialog = false
-                            Toast.makeText(context, "Đổi tên thành công!", Toast.LENGTH_SHORT).show()
-                        },
-                        onError = { errorMsg ->
-                            Toast.makeText(context, errorMsg, Toast.LENGTH_SHORT).show()
-                        }
+                    viewModel.updateUserName(newName, {
+                        currentDisplayName = newName;
+                        showEditDialog = false;
+                        Toast.makeText(context, "Đổi tên thành công!", Toast.LENGTH_SHORT).show() },
+                        { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
                     )
                 }
             )
@@ -256,7 +319,20 @@ fun UserProfileScreen(
 }
 
 @Composable
-fun UserInfoSection(
+fun SectionTitle(title: String) {
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        color = Color(0xFF475467),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(bottom = 12.dp, start = 4.dp)
+    )
+}
+
+@Composable
+fun UserInfoCard(
     name: String,
     email: String,
     avatarUrl: String?,
@@ -264,142 +340,91 @@ fun UserInfoSection(
     onAvatarChange: (Uri) -> Unit
 ) {
     val context = LocalContext.current
-    val interactionSource = remember { MutableInteractionSource() }
-
-    // 1. Launcher chọn ảnh (Photo Picker - Chuẩn mới của Android)
     val photoPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.PickVisualMedia()
-    ) { uri: Uri? ->
-        uri?.let { onAvatarChange(it) }
+        ActivityResultContracts.PickVisualMedia()
+    ) {
+        uri -> uri?.let { onAvatarChange(it) }
     }
+    val avatarInteractionSource = remember { MutableInteractionSource() }
+    val editIconInteractionSource = remember { MutableInteractionSource() }
 
-    // 2. Launcher xin quyền (cho các máy đời cũ)
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission()
-    ) { isGranted ->
-        if (isGranted) {
-            // Nếu được cấp quyền -> Mở Photo Picker
-            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-        } else {
-            Toast.makeText(context, "Cần quyền truy cập ảnh để đổi Avatar", Toast.LENGTH_SHORT).show()
-        }
-    }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Avatar
-        Box(
-            modifier = Modifier.wrapContentSize() // Kích thước vừa đủ ôm lấy nội dung
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(8.dp, RoundedCornerShape(20.dp)), // Đổ bóng
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(24.dp)
         ) {
-            // LỚP 1: AVATAR CHÍNH (Bị cắt hình tròn)
-            Box(
-                modifier = Modifier
-                    .size(120.dp) // Tăng kích thước lên chút cho đẹp
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer)
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null
-                    ) {
-                        // Sự kiện chạm vào ảnh để đổi
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
-                        }
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (avatarUrl.isNullOrEmpty()) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = null,
-                        modifier = Modifier.size(80.dp),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
-                } else {
-                    SubcomposeAsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(avatarUrl)
-                            .crossfade(true)
-                            .memoryCachePolicy(CachePolicy.DISABLED) // Tắt cache bộ nhớ (để luôn load ảnh mới nhất khi vừa đổi)
-                            .diskCachePolicy(CachePolicy.ENABLED)  // Vẫn giữ cache ổ cứng cho lần sau mở app
-                            .build(),
-                        contentDescription = "Avatar",
-                        contentScale = ContentScale.Crop, // Quan trọng: crop ảnh để lấp đầy hình tròn
-                        modifier = Modifier.fillMaxSize()
-                    )
+            // Avatar với viền
+            Box {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .border(4.dp, Color.White, CircleShape) // Viền trắng
+                        .shadow(4.dp, CircleShape)
+                        .clip(CircleShape)
+                        .background(Color.LightGray)
+                        .clickable(
+                            interactionSource = avatarInteractionSource,
+                            indication = null
+                        ) { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (avatarUrl.isNullOrEmpty()) {
+                        Icon(Icons.Default.Person, null, modifier = Modifier.size(60.dp), tint = Color.Gray)
+                    } else {
+                        SubcomposeAsyncImage(
+                            model = ImageRequest.Builder(LocalContext.current).data(avatarUrl).crossfade(true).diskCachePolicy(CachePolicy.ENABLED).memoryCachePolicy(CachePolicy.DISABLED).build(),
+                            contentDescription = "Avatar",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+                }
+                // Icon Edit Camera nhỏ
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .offset(x = 4.dp, y = 4.dp)
+                        .size(32.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        .border(2.dp, Color.White, CircleShape)
+                        .clickable(
+                            interactionSource = editIconInteractionSource,
+                            indication = null
+                        ) { photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.Edit, null, tint = Color.White, modifier = Modifier.size(16.dp))
                 }
             }
 
-            // LỚP 2: ICON MÁY ẢNH NHỎ (Nằm đè lên trên góc)
-            // Vì đặt sau trong code nên nó sẽ vẽ đè lên trên Avatar
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd) // Căn xuống góc dưới phải của BOX TỔNG
-                    .size(36.dp) // Kích thước vòng tròn trắng chứa icon
-                    // Tạo viền trùng màu nền để tạo hiệu ứng "cắt" giống Instagram
-                    .border(3.dp, MaterialTheme.colorScheme.background, CircleShape)
-                    .clip(CircleShape)
-                    .background(Color.White)
-                    .clickable( // Cũng cho phép bấm vào icon nhỏ này để đổi ảnh
-                        interactionSource = interactionSource,
-                        indication = null
-                    ) {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                            photoPickerLauncher.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly))
-                        } else {
-                            permissionLauncher.launch(Manifest.permission.READ_EXTERNAL_STORAGE)
-                        }
-                    }
-                    .padding(6.dp) // Padding bên trong để icon không bị sát viền
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Đổi ảnh",
-                    tint = Color.Gray,
-                    modifier = Modifier.fillMaxSize()
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Tên và Email
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = name,
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFF101828)
                 )
+                IconButton(onClick = onEditClick, modifier = Modifier.size(24.dp).padding(start = 8.dp)) {
+                    Icon(Icons.Default.Edit, null, tint = Color.Gray, modifier = Modifier.size(16.dp))
+                }
             }
-        }
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Row chứa Tên và Nút sửa
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.Center, // Căn giữa cả hàng
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            // Việc này giúp cân bằng trái phải, đẩy Text vào chính giữa màn hình
-            Box(modifier = Modifier.size(48.dp))
-
-            // 2. Tên User
             Text(
-                text = name,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                // Thêm các thuộc tính này để xử lý nếu tên quá dài
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                maxLines = 1,
-                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false) // fill=false để text chỉ chiếm chỗ nó cần, không giãn hết mức
+                text = email,
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color(0xFF667085)
             )
-
-            // 3. Nút Edit bên phải
-            IconButton(onClick = onEditClick) {
-                Icon(
-                    imageVector = Icons.Default.Edit,
-                    contentDescription = "Sửa tên",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
         }
-
-        Text(
-            text = email,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
-        )
     }
 }
 
@@ -445,8 +470,6 @@ fun ProfileOptionItem(
     icon: ImageVector,
     title: String,
     subtitle: String,
-    iconTint: Color = MaterialTheme.colorScheme.primary,
-    iconModifier: Modifier = Modifier,
     onClick: () -> Unit
 ) {
     Surface(
@@ -455,20 +478,32 @@ fun ProfileOptionItem(
         color = Color.Transparent
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 16.dp),
+            modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                tint = iconTint,
-                modifier = iconModifier.size(24.dp)
-            )
-            Spacer(modifier = Modifier.width(16.dp))
-            Column {
-                Text(text = title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
-                Text(text = subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(Color(0xFFF2F4F7), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
             }
+            Spacer(modifier = Modifier.width(16.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFF101828)
+                )
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color(0xFF667085)
+                )
+            }
+            Icon(Icons.Default.KeyboardArrowRight, null, tint = Color.Gray)
         }
     }
 }

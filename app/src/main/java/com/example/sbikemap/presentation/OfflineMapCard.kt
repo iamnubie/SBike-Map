@@ -67,7 +67,7 @@ fun OfflineMapCard(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = Color(0xFFF0F4F8)), // Màu nền xám xanh nhạt
         elevation = CardDefaults.cardElevation(0.dp)
     ) {
