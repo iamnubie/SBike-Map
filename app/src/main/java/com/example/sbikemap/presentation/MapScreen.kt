@@ -142,7 +142,7 @@ import com.mapbox.turf.TurfMisc
 data class MapStyleItem(
     val name: String,
     val styleUri: String,
-    val icon: ImageVector
+    val icon: Int
 )
 // Data class lưu thông tin tuyến đường
 data class RouteInfo(
@@ -520,10 +520,10 @@ fun MapScreen(
 
     // Danh sách kiểu bản đồ
     val mapStyles = listOf(
-        MapStyleItem("Phố", Style.MAPBOX_STREETS, Icons.Default.Build),
-        MapStyleItem("Vệ tinh", Style.SATELLITE_STREETS, Icons.Default.Build),
-        MapStyleItem("Mật độ", Style.TRAFFIC_DAY, Icons.Default.Build),
-        MapStyleItem("Tối", Style.TRAFFIC_NIGHT, Icons.Default.Build)
+        MapStyleItem("Phố", Style.MAPBOX_STREETS, R.drawable.mapbasic),
+        MapStyleItem("Vệ tinh", Style.SATELLITE_STREETS, R.drawable.mapsatellite),
+        MapStyleItem("Mật độ", Style.TRAFFIC_DAY, R.drawable.maptraffic),
+        MapStyleItem("Tối", Style.TRAFFIC_NIGHT, R.drawable.mapdark)
     )
 
     // Hàm helper để cập nhật thông tin tuyến đường lên UI
@@ -1053,9 +1053,9 @@ fun StyleOptionItem(
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = item.icon,
+                painter = painterResource(id = item.icon),
                 contentDescription = item.name,
-                tint = if (isSelected) MaterialTheme.colorScheme.primary else Color.DarkGray,
+                tint = Color.Unspecified,
                 modifier = Modifier.size(32.dp)
             )
         }
