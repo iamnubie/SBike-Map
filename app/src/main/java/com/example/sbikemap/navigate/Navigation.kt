@@ -16,6 +16,7 @@ import com.example.sbikemap.presentation.MapScreen
 import com.example.sbikemap.presentation.PlanScreen
 import com.example.sbikemap.presentation.SignupScreen
 import com.example.sbikemap.presentation.UserProfileScreen
+import com.example.sbikemap.presentation.WelcomeScreen
 import com.example.sbikemap.presentation.viewmodel.AuthViewModel
 import com.example.sbikemap.presentation.viewmodel.MapViewModel
 import com.example.sbikemap.presentation.viewmodel.ProfileViewModel
@@ -30,7 +31,7 @@ fun Navigate(
     val startDest = if (Firebase.auth.currentUser != null) {
         "map_route" // Đã đăng nhập -> Vào thẳng Map
     } else {
-        "login"     // Chưa đăng nhập -> Vào màn Login
+        "welcome"     // Chưa đăng nhập -> Vào màn chào mưng
     }
     NavHost(navController, startDestination = startDest) {
         composable("login") {
@@ -45,6 +46,9 @@ fun Navigate(
             LoginScreen(navController, authViewModel)
         }
         composable("signup") { SignupScreen(navController)}
+        composable("welcome") {
+            WelcomeScreen(navController = navController)
+        }
         composable("home") { HomeScreen(navController)}
         composable("map_route") {
             // MapViewModel cần TripApi
